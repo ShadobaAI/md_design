@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "module": "ESNext", "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"], "strict": true,
+    "skipLibCheck": true, "esModuleInterop": true, "noEmit": true,
+    "allowImportingTsExtensions": true, "experimentalDecorators": true,
+    "paths": { "@/*": ["./vendor/md_design/lib/*"] }
+  },
+  "include": ["*.ts", "tests/*.ts", "vendor/**/*.ts"]
+}

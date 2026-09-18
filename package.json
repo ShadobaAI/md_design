@@ -1,0 +1,33 @@
+{
+  "name": "md-design-playground",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc --noEmit && node scripts/build.mjs",
+    "test": "vitest run && node --test tests/*.test.mjs",
+    "start": "node scripts/preview.mjs",
+    "setup": "npm ci && npm run build && node scripts/install.mjs"
+  },
+  "dependencies": {
+    "@ungap/trim-end": "0.2.0",
+    "@ungap/trim-start": "0.2.0",
+    "chevrotain": "11.2.0",
+    "class-transformer": "0.5.1",
+    "date-fns": "4.1.0",
+    "reflect-metadata": "0.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.21",
+    "esbuild": "0.25.12",
+    "jsdom": "26.1.0",
+    "typescript": "5.8.3",
+    "vitest": "4.1.11"
+  },
+  "overrides": {
+    "lodash-es": "4.18.1"
+  }
+}
