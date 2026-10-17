@@ -9,7 +9,7 @@ export async function readPrototype(file) {
   if (text.length > 200_000) throw new Error('Файл превышает лимит 200 000 символов')
   return { text, name: basename(file) }
 }
-export async function startServer({ file, dist, port = 0 }) {
+export async function startServer({ file, dist }) {
   await readPrototype(file)
   const assets = new Map()
   for (const [name, type] of [['index.html', 'text/html'], ['playground.js', 'text/javascript'], ['preview.css', 'text/css']]) {
@@ -39,6 +39,6 @@ export async function startServer({ file, dist, port = 0 }) {
     } catch { res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Не удалось прочитать файл формы') }
   })
   server.requestTimeout = 10000
-  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve) })
+  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
   return { server, url: `http://127.0.0.1:${server.address().port}${prefix}` }
 }

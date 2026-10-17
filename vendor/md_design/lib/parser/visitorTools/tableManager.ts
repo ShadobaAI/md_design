@@ -92,6 +92,9 @@ export class TableManager {
   }
 
   public defineColumnsTypeDescription(): void {
+    if (this.currentRowType === TableRowType.Row) {
+      this.rowMap.validateCompleteRow()
+    }
     const headerCells = this.rowMap.getHeaderCells()
 
     for (let header of headerCells) {

@@ -49,6 +49,34 @@ test("extra table values are rejected instead of overwriting another cell", () =
   expect([...c.querySelectorAll('td')].map(cell => cell.textContent)).toEqual(['1', '2'])
 })
 
+test.each([
+  ['| А | Б |\n| --- | --- |\n| | 3 |\n| | 4 |', ['', '3', '', '4']],
+  ['| А | Б | В |\n| --- | --- | --- |\n| | | 3 |', ['', '', '3']],
+  ['А | Б\n--- | ---\n | 3', ['', '3']],
+])("empty leading table cells keep values in their columns: %s", (text, values) => {
+  const c = render(text)
+  expect([...c.querySelectorAll('td')].map(cell => cell.textContent)).toEqual(values)
+})
+
+test("incomplete multiline table records fail instead of silently losing data", () => {
+  const header = '| Заказ ||\n| Товар | Количество |\n| --- | --- |\n'
+  expect(() => parseForm(header + '| Заказ 001 ||')).toThrow(/Незавершённая многострочная запись/)
+  const c = render(header + '| Заказ 001 ||\n| Товар 1 | 3 |')
+  expect(c.textContent).toContain('Заказ 001')
+  expect(c.textContent).toContain('Товар 1')
+  expect(c.textContent).toContain('3')
+})
+
+test("empty first cells reset tree depth and multiline continuations preserve it", () => {
+  const c = render('| А | Б |\n| --- | --- |\n| Корень | 1 |\n| . Дочерний | 2 |\n| | 3 |')
+  const rows = c.querySelectorAll('tbody tr')
+  expect(rows[1].querySelector('td')?.style.paddingLeft).toBe('30px')
+  expect(rows[2].querySelector('td')?.style.paddingLeft).toBe('')
+  expect(rows[2].textContent).toBe('3')
+  const multiline = render('| Заказ ||\n| Товар | Количество |\n| --- | --- |\n| Корень ||\n| А | 1 |\n| . Дочерний ||\n| Б | 2 |')
+  expect(multiline.querySelectorAll('tbody tr')[2].querySelector('td')?.style.paddingLeft).toBe('30px')
+})
+
 test("readonly column groups disable descendant cells and controls", () => {
   const c = render('| -Данные- {ТолькоПросмотр = Истина} ||\n| А | Б |\n| --- | --- |\n| 1 | [X] |')
   expect([...c.querySelectorAll('td')].map(cell => cell.getAttribute('contenteditable'))).toEqual(['false', 'false'])
@@ -161,6 +189,27 @@ test("command menus overlay the form, support keyboard and dismiss outside", () 
   trigger.click(); items[0].click()
   expect(menu.hidden).toBe(true)
   c.remove()
+})
+
+test("menu keyboard navigation skips hidden and unavailable items", ({ onTestFinished }) => {
+  const c = render('< Еще\nЕще\n. Скрытый первый {Видимость = Ложь}\n. Первый\n. Скрытый средний {Видимость = Ложь}\n. Недоступный {Доступность = Ложь}\n. Последний >')
+  document.body.append(c)
+  onTestFinished(() => c.remove())
+  const trigger = c.querySelector<HTMLButtonElement>('[aria-haspopup=menu]')!
+  trigger.click()
+  expect(document.activeElement?.textContent).toBe('Первый')
+  const press = (key: string) => document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+  press('ArrowDown')
+  expect(document.activeElement?.textContent).toBe('Последний')
+  press('ArrowDown')
+  expect(document.activeElement?.textContent).toBe('Первый')
+  press('End')
+  expect(document.activeElement?.textContent).toBe('Последний')
+  press('Home')
+  expect(document.activeElement?.textContent).toBe('Первый')
+  press('Escape')
+  trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }))
+  expect(document.activeElement?.textContent).toBe('Последний')
 })
 
 test("pricing screenshot: six zones, swatches and per-cell readonly boundaries", () => {

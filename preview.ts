@@ -154,7 +154,10 @@ function renderContent(e: BaseElement, warnings: Set<string>): HTMLElement {
       trigger.setAttribute("aria-controls", popup.id)
       popup.hidden = true
       for (const item of e.items) popup.append(renderElement(item, warnings))
-      const items = () => [...popup.querySelectorAll<HTMLButtonElement>("button")].filter(button => button.closest('[role="menu"]') === popup && !button.disabled)
+      const items = () => [...popup.querySelectorAll<HTMLButtonElement>("button")].filter(button => {
+        const hiddenAncestor = button.closest('[hidden], [inert]')
+        return button.closest('[role="menu"]') === popup && !button.disabled && (!hiddenAncestor || hiddenAncestor === popup)
+      })
       items().forEach(button => { button.setAttribute("role", "menuitem"); button.tabIndex = -1 })
       const close = (restoreFocus = false) => {
         popup.hidden = true

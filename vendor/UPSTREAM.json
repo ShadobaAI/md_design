@@ -3,6 +3,10 @@
   "commit": "45e130f14970367c6e38deca937f61eb896ee6db",
   "localPatches": [
     {
+      "file": "lib/parser/groupMap.ts",
+      "reason": "Close sibling groups and page sets at equal heading indentation while preserving genuinely nested groups, pages and parallel columns."
+    },
+    {
       "file": "lib/parser/visitorTools/commandBarManager.ts",
       "reason": "Use a null-prototype caption dictionary to support names such as constructor and __proto__."
     },
@@ -12,7 +16,11 @@
     },
     {
       "file": "lib/parser/visitorTools/tableRowMap.ts",
-      "reason": "Preserve property-only cells and reject excess cells instead of silently overwriting values."
+      "reason": "Preserve property-only and leading empty cells and logical tree depth; reject excess cells and detect incomplete multiline records instead of silently losing values."
+    },
+    {
+      "file": "lib/parser/visitorTools/tableManager.ts",
+      "reason": "Validate completion of the final multiline table record before returning the parsed table."
     }
   ],
   "files": [

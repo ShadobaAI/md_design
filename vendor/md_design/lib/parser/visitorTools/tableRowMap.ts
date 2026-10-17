@@ -15,6 +15,7 @@ export class TableRowMap {
   private readonly headerCells: Map<TableColumnElement, TableCellElement[]> = new Map()
 
   private currentLevel: number = 0
+  private isFirstCell: boolean = true
 
   constructor(table: TableElement, headerMap: TableHeaderMap) {
     this.table = table
@@ -23,6 +24,7 @@ export class TableRowMap {
   }
 
   public addRow(): void {
+    this.isFirstCell = true
     this.headerMap.rollHeaderRow()
 
     if (this.headerMap.onFirstRow()) {
@@ -40,15 +42,18 @@ export class TableRowMap {
     // Local patch: property-only cells still carry meaningful presentation data.
     const isEmpty = !item.hasCheckbox && item.value.trim() == "" && item.properties.size === 0
 
-    if (this.headerMap.isSkipableColumn() && isEmpty) return
+    // Only the first empty node represents the optional leading pipe.
+    const skipLeadingPipe = this.isFirstCell && this.headerMap.isSkipableColumn() && isEmpty
+    this.isFirstCell = false
+    if (skipLeadingPipe) return
+
+    if (this.headerMap.onFirstRow() && this.headerMap.onFirstColumn()) {
+      this.currentLevel = level
+    }
 
     if (isEmpty) {
       this.headerMap.nextColumn()
       return
-    }
-
-    if (this.headerMap.onFirstColumn()) {
-      this.currentLevel = level
     }
 
     const column = this.headerMap.getCurrentColumn()
@@ -71,6 +76,12 @@ export class TableRowMap {
 
   public getHeaderCells(): Map<TableColumnElement, TableCellElement[]> {
     return this.headerCells
+  }
+
+  public validateCompleteRow(): void {
+    if (!this.headerMap.onFirstRow()) {
+      throw new Error("Незавершённая многострочная запись таблицы: добавьте оставшиеся строки")
+    }
   }
 
   public initializeHeaderCellsMap(): void {

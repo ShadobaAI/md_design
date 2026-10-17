@@ -50,6 +50,7 @@ export class GroupMap {
 
   public addPage(node: CstNode, indent: number): void {
     let parentInfo = this.getContainerAtIndent(indent + 1)
+    if (!this.isPageNode(parentInfo.node)) this.leaveSiblingHeader(parentInfo, indent)
 
     let pages = this.getCreatePagesNode(parentInfo)
 
@@ -59,6 +60,7 @@ export class GroupMap {
 
   public addHorizontalGroup(nodes: CstNode[], indent: number): void {
     let parentInfo = this.getContainerAtIndent(indent + 1)
+    this.leaveSiblingHeader(parentInfo, indent)
 
     let horizontalGroup = this.getCreateHorizontalGroupNode(parentInfo)
 
@@ -171,11 +173,17 @@ export class GroupMap {
   // #region group
 
   private getCreateHorizontalGroupNode(containerInfo: ContainerInfo): HorizontalGroupNode {
-    if (containerInfo.exact && this.isPageNode(containerInfo.node)) {
-      return containerInfo.node.parent as HorizontalGroupNode
-    }
-
     return new HorizontalGroupNode(containerInfo.node)
+  }
+
+  // Headers store their content indentation, one column after the header itself.
+  // A new header at the same indentation belongs to the enclosing container.
+  // Consecutive pages are the exception: addPage reuses their existing page set.
+  private leaveSiblingHeader(containerInfo: ContainerInfo, indent: number): void {
+    const current = containerInfo.node
+    if (!containerInfo.exact || current.indent !== indent + 1 || this.isRootNode(current)) return
+    containerInfo.node = current.parent.parent as ContainerNode
+    containerInfo.exact = false
   }
 
   private createVerticalGroupNode(parent: HorizontalGroupNode, indent: number, headerNode: CstNode): VerticalGroupNode {

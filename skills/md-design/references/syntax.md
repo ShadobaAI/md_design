@@ -110,7 +110,7 @@ Grouped headers:
 | 001 | Пример |
 ```
 
-Without hyphens around the parent header, child headers define multilevel data rows rather than a pure column group. Each logical record then uses multiple physical lines:
+Without hyphens around the parent header, child headers define multilevel data rows rather than a pure column group. Each logical record then requires all of its physical lines, including empty continuation lines; an incomplete final record is rejected:
 
 ```text
 | Заказ ||

@@ -26,15 +26,15 @@ node "<plugin>/scripts/preview.mjs" --file "<absolute-path-to-form.md>" --check
 node "<plugin>/scripts/preview.mjs" --file "<absolute-path-to-form.md>" --background
 ```
 
-The second command returns JSON with `url`, `pid`, and `file`. Use the complete URL, including its random path, in the in-app browser. The default port is 18765. Persistent settings are in `$CODEX_HOME/md-design/config.json`, or `~/.codex/md-design/config.json` when `CODEX_HOME` is unset: `{"port": 18765}`. The only supported key is `port`, an integer from 0 to 65535; changes apply to the next launch. Change these settings only when requested; never edit the installed plugin defaults. Optional `--port <number>` overrides the configured port for one launch; `--port 0` requests an OS-selected port.
+The second command returns JSON with `url`, `pid`, and `file`. The OS selects a free port for each preview. Use the complete returned URL, including its port and random path, in the in-app browser.
 
 Wait for a successful exit and readiness JSON before opening. On an error, inspect stderr, correct its cause, and retry. Files are limited to 200,000 characters / 800,000 bytes; do not truncate a larger form silently.
 
 Open with `mcp__codex_app__open_in_codex`: `{target: {type: "browser", url: <url>}}`. Inspect using an available browser tool, e.g. `cua.createBrowserTab("iab", url, {visible:true})`, following that tool's documentation. If available, call `markDeliverable()` on the final tab. Opening a panel alone is not visual verification. If the in-app browser is unavailable, return the URL and state the limitation.
 
-If browser permissions block inspection, ask the user to allow the preview's origin (`http://127.0.0.1:<actual-port>`, without the random path) in **Settings → Browser → Agent permissions**, then retry. Organization-managed restrictions require an administrator. Report unverified visual behavior; do not bypass access controls or change ports to evade them.
+If browser permissions block inspection, ask the user to open **Настройки → Браузер → Разрешения для сайтов (Settings → Browser → Agent permissions)** and set **Просмотр веб-страниц (Browse)** in the **По умолчанию (Default)** row to **Всегда разрешать (Always allow)**, which permits browsing all sites, then retry. Organization-managed restrictions require an administrator. Report unverified visual behavior; do not bypass access controls or restart to evade them.
 
-The server rereads the selected file; the page rerenders when its contents change. Polling an unchanged file preserves current input. Reuse the process and tab for the same form. A second form needs another instance with a different `--port` and browser access to that origin. If the configured port is busy, report the conflict rather than silently changing it. Stop only a PID returned by your own launch when preview is no longer needed; leave the delivered form open.
+The server rereads the selected file; the page rerenders when its contents change. Polling an unchanged file preserves current input. Reuse the process and tab for the same form; start another instance for a different file. Each instance gets its own free port. Stop only a PID returned by your own launch when preview is no longer needed; leave the delivered form open.
 
 If `dist/parser.mjs` is missing, rebuild a source checkout with `npm ci` and `npm run build`. Reinstall an incomplete installed package instead of downloading arbitrary dependencies.
 
