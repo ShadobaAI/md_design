@@ -16,7 +16,8 @@ button, summary { cursor: pointer; }
 .preview-button:active { background: #ffe697; box-shadow: inset 0 1px 2px #0002; }
 .primary { background: #ffe36b; border-color: #d3af37; font-weight: bold; }
 .preview-field { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; min-width: 0; width: 700px; max-width: 100%; min-height: 30px; }
-.preview-label { flex: 0 0 264px; overflow-wrap: anywhere; }
+.preview-align-scope { --preview-label-width: auto; }
+.preview-label { flex: 0 0 var(--preview-label-width, auto); overflow-wrap: anywhere; }
 .preview-control { display: flex; flex: 1; min-width: 0; border: 1px solid #bebebe; border-radius: 2px; background: #fff; }
 .preview-control:focus-within { border-color: #b99b2c; box-shadow: 0 0 0 1px #ffe269; }
 .preview-control input, .preview-control textarea { width: 100%; min-width: 0; padding: 6px 8px; border: 0; background: transparent; outline: none; }
@@ -25,6 +26,10 @@ button, summary { cursor: pointer; }
 .preview-adornment:hover { background: #fff0b1; }
 .preview-row { display: flex; flex-wrap: wrap; gap: 0 16px; }
 .preview-row > * { flex: 1; min-width: 180px; }
+@media (min-width: 641px) {
+  .preview-inline-row { column-gap: 24px; }
+  .preview-inline-row > .preview-field:not(:first-child) > .preview-label { flex: 0 1 auto; }
+}
 .preview-group { padding: 8px 0; min-width: 0; }
 .preview-group h2 { font-size: 14px; margin: 0 0 12px; padding-bottom: 0; border-bottom: 0; font-weight: 600; color: #333; }
 .preview-group summary { margin-bottom: 12px; font-weight: bold; }
@@ -59,7 +64,6 @@ input[type=checkbox], input[type=radio] { accent-color: #d3ac21; }
 .preview-unsupported { border: 1px dashed #a86e00; padding: 12px; color: #805000; }
 @media (max-width: 640px) {
   .preview-row > * { flex-basis: 100%; }
-  .preview-label { flex-basis: 95px; }
   #preview { padding: 12px; }
 }
 .preview-dialog { border: 1px solid #aaa; border-radius: 3px; padding: 20px; min-width: 320px; box-shadow: 0 6px 30px #0003; }

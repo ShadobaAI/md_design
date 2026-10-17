@@ -36,6 +36,32 @@ function applyColors(e: BaseElement, result: HTMLElement, warnings: Set<string>)
   }
 }
 let sequence = 0
+
+/** Share a caption column within each group, using the client's actual font metrics. */
+export function alignPreviewFields(container: HTMLElement): void {
+  const scopes = [container, ...container.querySelectorAll<HTMLElement>(".preview-align-scope")]
+  for (const scope of scopes) scope.style.removeProperty("--preview-label-width")
+  const columns = new Map<HTMLElement, { captions: HTMLElement[]; available: number }>()
+  for (const field of container.querySelectorAll<HTMLElement>(".preview-field")) {
+    const title = field.querySelector<HTMLElement>(":scope > .preview-label")
+    if (!title || title.hidden || field.closest("[hidden]")) continue
+    const row = field.parentElement
+    // Later inline captions stay next to their controls; stacked fields share the column.
+    if (window.innerWidth > 640 && row?.classList.contains("preview-inline-row") && row.firstElementChild !== field) continue
+    const available = field.getBoundingClientRect().width
+    if (!available) continue
+    const scope = field.closest<HTMLElement>(".preview-align-scope") ?? container
+    const column = columns.get(scope) ?? { captions: [], available }
+    column.captions.push(title)
+    column.available = Math.min(column.available, available)
+    columns.set(scope, column)
+  }
+  for (const [scope, { captions, available }] of columns) {
+    const natural = Math.max(...captions.map(title => title.getBoundingClientRect().width))
+    const width = Math.ceil(Math.min(natural, available * .4))
+    scope.style.setProperty("--preview-label-width", `${width}px`)
+  }
+}
 // One delegated listener survives rerenders without accumulating per-menu listeners.
 document.addEventListener("pointerdown", event => {
   for (const menu of document.querySelectorAll(".preview-menu")) {
@@ -52,12 +78,14 @@ export function renderPreview(container: HTMLElement, form: FormElement | undefi
     for (const item of form.items) fragment.append(renderElement(item, warnings))
   }
   container.replaceChildren(fragment)
+  container.classList.add("preview-align-scope")
   // Reset properties applied on a previous render, then apply the form itself.
   container.hidden = false
   container.removeAttribute("inert")
   container.classList.remove("preview-disabled")
   for (const key of ["color", "background-color", "background-image", "text-align"]) container.style.removeProperty(key)
   if (form) applyProperties(form, container, warnings)
+  alignPreviewFields(container)
   return [...warnings]
 }
 
@@ -104,6 +132,7 @@ function renderContent(e: BaseElement, warnings: Set<string>): HTMLElement {
     const panels: HTMLElement[] = []
     const select = (index: number) => {
       buttons.forEach((b, i) => { b.setAttribute("aria-selected", String(i === index)); b.tabIndex = i === index ? 0 : -1; panels[i].hidden = i !== index })
+      alignPreviewFields(root.closest<HTMLElement>(".preview-align-scope") ?? root)
     }
     pages.forEach((p, i) => {
       const id = `page-${++sequence}`
@@ -124,7 +153,7 @@ function renderContent(e: BaseElement, warnings: Set<string>): HTMLElement {
   }
   if (e instanceof VerticalGroupElement || e instanceof PageElement) {
     const collapsible = e.getProperty("Поведение") === "Свертываемая" || e.getProperty("Поведение") === "Всплывающая"
-    const group = node(collapsible ? "details" : "section", "preview-group")
+    const group = node(collapsible ? "details" : "section", "preview-group preview-align-scope")
     const display = e.getProperty("Отображение")
     if (display === "СлабоеВыделение") group.classList.add("group-weak")
     if (display === "ОбычноеВыделение") group.classList.add("group-normal")
@@ -138,6 +167,7 @@ function renderContent(e: BaseElement, warnings: Set<string>): HTMLElement {
   }
   if (e instanceof CommandBarElement || e instanceof OneLineGroupElement || e instanceof HorizontalGroupElement || e instanceof ButtonGroupElement) {
     const group = node("div", e instanceof CommandBarElement || e instanceof ButtonGroupElement ? "preview-commands" : "preview-row")
+    if (e instanceof OneLineGroupElement) group.classList.add("preview-inline-row")
     for (const item of e.items) group.append(renderElement(item, warnings))
     return group
   }

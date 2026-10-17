@@ -1,14 +1,52 @@
 // @vitest-environment jsdom
-import { expect, test } from "vitest"
+import { expect, test, vi } from "vitest"
 import { readFileSync } from "node:fs"
 import { parseForm } from "./parser"
 import { FormElement } from "@/elements"
-import { renderPreview } from "./preview"
+import { alignPreviewFields, renderPreview } from "./preview"
 function render(text: string) {
   const container = document.createElement("div")
   renderPreview(container, parseForm(text))
   return container
 }
+
+test("caption columns follow visible text, group boundaries and stacked inline fields", () => {
+  const c = render('Номер: 1 & Дата документа: 17.10.2026\nКонтрагент: Демо\nСкрытый: x {Видимость = Ложь}\nБез подписи: x {ПоложениеЗаголовка = Нет}\n###Группа\n  Код: 1\n  Наименование: Демо')
+  const widths: Record<string, number> = { Номер: 40, "Дата документа": 130, Контрагент: 90, Скрытый: 500, "Без подписи": 500, Код: 30, Наименование: 75 }
+  for (const field of c.querySelectorAll<HTMLElement>('.preview-field')) {
+    vi.spyOn(field, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 400, 30))
+    const title = field.querySelector<HTMLElement>('.preview-label')!
+    vi.spyOn(title, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, widths[title.textContent!], 16))
+  }
+  try {
+    vi.stubGlobal('innerWidth', 1024)
+    alignPreviewFields(c)
+    expect(c.style.getPropertyValue('--preview-label-width')).toBe('90px')
+    expect(c.querySelector<HTMLElement>('.preview-group')!.style.getPropertyValue('--preview-label-width')).toBe('75px')
+    vi.stubGlobal('innerWidth', 360)
+    alignPreviewFields(c)
+    expect(c.style.getPropertyValue('--preview-label-width')).toBe('130px')
+    c.querySelectorAll<HTMLElement>('.preview-field')[2].hidden = true
+    vi.stubGlobal('innerWidth', 1024)
+    alignPreviewFields(c)
+    expect(c.style.getPropertyValue('--preview-label-width')).toBe('40px')
+  } finally { vi.unstubAllGlobals(); vi.restoreAllMocks() }
+})
+
+test("long captions wrap without consuming the control's available width", () => {
+  const c = render('Очень длинный заголовок: значение')
+  const field = c.querySelector<HTMLElement>('.preview-field')!
+  const title = field.querySelector<HTMLElement>('.preview-label')!
+  try {
+    const size = vi.spyOn(field, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 400, 30))
+    vi.spyOn(title, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 350, 16))
+    alignPreviewFields(c)
+    expect(c.style.getPropertyValue('--preview-label-width')).toBe('160px')
+    size.mockReturnValue(new DOMRect(0, 0, 200, 30))
+    alignPreviewFields(c)
+    expect(c.style.getPropertyValue('--preview-label-width')).toBe('80px')
+  } finally { vi.restoreAllMocks() }
+})
 
 test("form properties apply to descendants and reset on rerender", () => {
   const c = render('--- Форма --- {ТолькоПросмотр = Истина; ЦветФона = #ff0000; НеизвестноеСвойство = Значение}\nИмя: Иван__Х')

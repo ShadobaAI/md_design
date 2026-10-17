@@ -1,8 +1,10 @@
 import { parseForm } from "./parser"
-import { renderPreview } from "./preview"
+import { alignPreviewFields, renderPreview } from "./preview"
 const preview = document.querySelector<HTMLElement>("#preview")!
 const errors = document.querySelector<HTMLElement>("#errors")!
 let lastText: string | undefined
+new ResizeObserver(() => alignPreviewFields(preview)).observe(preview)
+void document.fonts.ready.then(() => alignPreviewFields(preview))
 async function refresh() {
   try {
     const response = await fetch("./prototype", { cache: "no-store", signal: AbortSignal.timeout(5000) })
