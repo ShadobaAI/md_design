@@ -12,6 +12,7 @@ from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 from release_policy import read_source_manifest, resolve_version
 
 ROOT = Path(__file__).resolve().parent.parent
+CATALOG_TEMPLATE = "packaging/marketplace.template.json"
 FILES = [
     "LICENSE",
     ".codex-plugin/plugin.json",
@@ -63,10 +64,11 @@ def package(output, version=None):
     paths = list(FILES)
     paths += [file for file in OPTIONAL_FILES if (ROOT / file).exists()]
     # Validate every input before touching the previous output.
-    for relative in paths:
+    for relative in [*paths, CATALOG_TEMPLATE]:
         file = ROOT / relative
         if not file.is_file() or file.resolve() != file.absolute():
             raise ValueError(f"Missing input or symlink in package path: {relative}")
+    catalog = json_read(ROOT / CATALOG_TEMPLATE)
     output = output.resolve()
     if output != ROOT / ".build":
         raise ValueError("Output must be the repository .build directory")
@@ -110,7 +112,6 @@ def package(output, version=None):
         "revision": revision, "dirty": dirty, "runId": os.environ.get("GITHUB_RUN_ID"),
     })
     marketplace = output / "marketplace"
-    catalog = json_read(ROOT / ".agents/plugins/marketplace.json")
     # A catalog becomes available only together with its built runtime.
     catalog["plugins"][0]["policy"]["installation"] = "AVAILABLE"
     json_write(marketplace / ".agents/plugins/marketplace.json", catalog)

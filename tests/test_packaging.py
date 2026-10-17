@@ -38,10 +38,10 @@ class PackagingTests(unittest.TestCase):
             target = self.root / file
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text("fixture", encoding="utf-8")
-        for file in [".codex-plugin/plugin.json", "package.json", "package-lock.json", ".agents/plugins/marketplace.json"]:
+        for file in [".codex-plugin/plugin.json", "package.json", "package-lock.json", packager.CATALOG_TEMPLATE]:
             (self.root / file).parent.mkdir(parents=True, exist_ok=True)
             (self.root / file).write_bytes((ROOT / file).read_bytes())
-        catalog_file = self.root / ".agents/plugins/marketplace.json"
+        catalog_file = self.root / packager.CATALOG_TEMPLATE
         catalog = json.loads(catalog_file.read_text(encoding="utf-8"))
         catalog["plugins"][0]["policy"]["installation"] = "NOT_AVAILABLE"
         catalog_file.write_text(json.dumps(catalog), encoding="utf-8")
@@ -68,15 +68,17 @@ class PackagingTests(unittest.TestCase):
         self.assertFalse(build["dirty"])
         self.assertFalse((self.root / "unpacked/plugins/md-design/dist/playground.js.map").exists())
         self.assertFalse((self.root / "unpacked/plugins/md-design/local-secret.txt").exists())
-        source = json.loads((self.root / ".agents/plugins/marketplace.json").read_text(encoding="utf-8"))
+        source = json.loads((self.root / packager.CATALOG_TEMPLATE).read_text(encoding="utf-8"))
         catalog = json.loads((self.root / "unpacked/.agents/plugins/marketplace.json").read_text(encoding="utf-8"))
+        self.assertFalse((self.root / ".agents/plugins/marketplace.json").exists())
+        self.assertFalse((self.root / "unpacked/plugins/md-design/packaging").exists())
         self.assertEqual(source["plugins"][0]["policy"]["installation"], "NOT_AVAILABLE")
         self.assertEqual(catalog["name"], "shadobaai")
         self.assertEqual(catalog["interface"]["displayName"], "ShadobaAI")
         self.assertEqual(catalog["plugins"][0]["policy"]["installation"], "AVAILABLE")
 
     def test_packages_for_another_marketplace_are_rejected(self):
-        path = self.root / ".agents/plugins/marketplace.json"
+        path = self.root / packager.CATALOG_TEMPLATE
         original = path.read_text(encoding="utf-8")
         for key, value in [("name", "other-marketplace"), ("interface", {"displayName": "Other store"})]:
             catalog = json.loads(original)
@@ -87,6 +89,19 @@ class PackagingTests(unittest.TestCase):
             with self.subTest(key=key), self.assertRaisesRegex(ValueError, "Unexpected marketplace source"):
                 verifier.verify(output, destination)
             self.assertFalse(destination.exists())
+
+    def test_source_checkout_does_not_register_a_marketplace(self):
+        for relative in [".agents/plugins/marketplace.json", ".claude-plugin/marketplace.json"]:
+            with self.subTest(path=relative):
+                self.assertFalse((ROOT / relative).exists())
+
+    def test_missing_catalog_template_preserves_previous_package(self):
+        output = self.package()
+        original = (output / "SHA256SUMS").read_bytes()
+        (self.root / packager.CATALOG_TEMPLATE).unlink()
+        with self.assertRaisesRegex(ValueError, "Missing input"):
+            self.package()
+        self.assertEqual((output / "SHA256SUMS").read_bytes(), original)
 
     def test_release_excludes_stale_source_maps(self):
         output = self.package()

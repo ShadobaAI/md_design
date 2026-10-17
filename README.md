@@ -75,7 +75,7 @@ npm.cmd run package:plugin -- --version 0.1.0
 npm.cmd run check:plugin
 ```
 
-ZIP-файлы и `SHA256SUMS` появятся в `.build`, локальный магазин — в `.build/marketplace`. Добавь этот каталог как локальный источник плагинов для проверки установки; [инструкция OpenAI](https://developers.openai.com/plugins/build/plugins#add-a-marketplace-from-the-cli).
+ZIP-файлы и `SHA256SUMS` появятся в `.build`, каталог для проверки установки — в `.build/marketplace`. Для локальной проверки подключай этот каталог, а не репозиторий исходников; [инструкция OpenAI](https://developers.openai.com/plugins/build/plugins#add-a-marketplace-from-the-cli). Шаблон каталога: [packaging/marketplace.template.json](packaging/marketplace.template.json).
 
 Для выпуска:
 
