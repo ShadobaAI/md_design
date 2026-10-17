@@ -16,7 +16,11 @@
     },
     {
       "file": "lib/parser/visitorTools/tableRowMap.ts",
-      "reason": "Preserve property-only and leading empty cells and logical tree depth; reject excess cells and detect incomplete multiline records instead of silently losing values."
+      "reason": "Preserve property-only and leading empty cells and logical tree depth; reject excess cells and incomplete multiline records; collect cell values for automatic column type inference."
+    },
+    {
+      "file": "lib/parser/typeProcessor.ts",
+      "reason": "Apply type parameters through the canonical type alias, including lowercase and mixed-case type names."
     },
     {
       "file": "lib/parser/visitorTools/tableManager.ts",

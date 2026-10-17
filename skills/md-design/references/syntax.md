@@ -1,73 +1,59 @@
 # md_design syntax
 
-Based on md_design 0.15.1, commit `45e130f14970367c6e38deca937f61eb896ee6db`; checked against its [syntax documentation](https://github.com/crimsongoldteam/md_design/tree/45e130f14970367c6e38deca937f61eb896ee6db/docs) and this plugin's parser/renderer. This is a DSL, not ordinary Markdown. Do not wrap the delivered `.md` in a code fence or add explanatory headings/lists.
+DSL, not ordinary Markdown. Save the form without code fences, explanatory headings or lists. Based on [upstream syntax](https://github.com/crimsongoldteam/md_design/tree/45e130f14970367c6e38deca937f61eb896ee6db/docs) and the bundled parser/preview. Read the sections needed for the current form.
 
-## Form, labels, commands
+## Title, labels and commands
 
 ```text
 --- Заказ покупателя ---
-< Записать и закрыть {КнопкаПоУмолчанию = Истина} | Записать | Отмена >
+< Записать {КнопкаПоУмолчанию = Истина} | Отмена >
 Данные покупателя
 ```
 
-Place the form title first. A plain line is a label. Commands use `< ... >`, separated by `|`. Multiline menus use dots for nesting:
+Title first; a plain line is a label. `< ... >` contains commands separated by `|`; a single command uses the same syntax. `| - |` separates command groups. Menus use dots for nesting:
 
 ```text
 < Записать | Еще
-Еще
-. Печать
-. История >
-```
-
-Use `| - |` between command groups. A menu separator occupies its own dotted line; following items need one extra dot to belong to that separator's group:
-
-```text
-< Еще
 Еще
 . Печать
 . -
 .. Закрыть >
 ```
 
-Business buttons are clickable without executing operations; menus expand. Single-button syntax is `< Выполнить >`; it renders in the preview's command container. The parser accepts images before or after a caption (`@Печать Печать`, `Сохранить @Записать`); the 1C image library is not bundled and uses placeholders.
+After a menu separator, add one extra dot to its following items. Images may precede/follow captions (`@Печать Печать`, `Сохранить @Записать`); preview uses placeholders. Commands do not execute business operations.
 
-## Fields, checkboxes, radios
+## Fields, checkboxes and radios
 
 ```text
-Номер: 000001 {Тип = Строка(9)} & Дата: 18.09.2026
+Номер: 000001 {Тип = Строка(9)} & Дата: 17.10.2026__В
 Организация: ООО Север__ВХ
 Склад: Основной__С
 Сумма: 1200.50 {Тип = Число(15, 2)}
+Время: __В {Тип = Дата(Время)}
+Момент: __В {Тип = Дата(ДатаВремя)}
 [X] Активен
-[ ] Пометка
+Флажок справа [ ]
+[0| ] Выключено
+[ |1] Включено
 Вид: (X)Юридическое лицо ( )Физическое лицо
+Период: (X)День ( )Неделя {ВидПереключателя = Тумблер}
 Комментарий: Первая строка
 _____________
 _____________
 ```
 
-Fields use `Caption: Value`; values may be empty. Types are inferred; explicitly use `Строка` for identifiers with leading zeros. Dates use `dd.mm.yyyy`, times `hh:mm[:ss]`, numbers a decimal dot/comma. Lines of `___` immediately after a field enable multiline input. `&` places elements in one row.
+`Caption: Value` allows empty values. `&` places controls in one row. Lines of `___` immediately after a field enable multiline input.
 
-Modifiers after `__` use **Cyrillic** letters: `В` selection, `С` dropdown, `Х` clear, `О` open, `Д` stepper. Selection/dropdown/open show a local value-entry dialog; date selection opens a calendar; stepper adds one. These interactions have no live reference data or server handlers.
+Modifiers after `__` are **Cyrillic**: `В` select, `С` dropdown, `Х` clear, `О` open, `Д` stepper. Selection/dropdown/open use local value-entry dialogs; date selection uses a calendar; the stepper adds one. No live reference data or handlers.
 
-An empty value defaults to string, regardless of its caption. Use `Дата: __В {Тип = Дата}` for an empty date with a calendar. A blank numeric field likewise needs explicit `Тип = Число(15, 2)`. Date parts accept `Дата(Дата)`, `Дата(Время)`, `Дата(ДатаВремя)`; calendar mode follows the current value, so empty time/datetime controls do not select their mode from type parameters alone. Types do not enforce business validation or live data binding.
-
-Checkboxes may follow their captions; switches use a `|` with an on/off marker on either side. Radios may omit their caption or use segmented presentation:
-
-```text
-Флажок справа [X]
-[0| ] Выключено
-[ |1] Включено
-( )Низкий (X)Обычный ( )Высокий
-Период: (X)День ( )Неделя ( )Месяц {ВидПереключателя = Тумблер}
-```
+Types are inferred from values: dates `dd.mm.yyyy` / `dd.mm.yy`, time `h:mm[:ss]`, datetime with a space, numbers with dot/comma. Empty fields default to string. Specify `Тип = Строка(9)` for identifiers, `Число(15, 2)` for empty numbers, `Дата` for empty dates. Calendar controls need `__В`; `Дата(Время)` / `Дата(ДатаВремя)` select time/datetime mode even when empty. Union types use commas: `{Тип = Строка(100), Число(15, 2)}`. Types do not enforce validation.
 
 ## Groups and pages
 
 ```text
 ###Реквизиты
   Номер: 001
-  Дата: 18.09.2026
+  Дата: 17.10.2026
 
 #Левая колонка #Правая колонка
   Имя: Иван    +Город: Москва
@@ -79,9 +65,9 @@ Checkboxes may follow their captions; switches use a `|` with an on/off marker o
   Комментарий:
 ```
 
-Indent children consistently with two spaces. An unindented group/page ends the previous nesting. Group headings on one line create a horizontal group; `+` splits its content into columns. Prefer `&` for a simple row of fields.
+Indent children consistently with two spaces. A group/page at the same indentation starts a sibling. Group headings on one line create columns; `+` separates their contents. Prefer `&` for a simple row.
 
-`#` has no emphasis; `##` weak, `###` normal, `####` strong, `#####` collapsible, `######` popup. Preview approximates popup groups as expandable sections. `/Caption` defines a page; pages may nest. Tabs support mouse, arrows, Home, and End. Each tab set starts on its first visible page; a page's `Доступность = Ложь` disables its contents, not its tab button. Report these limits when matching source states; do not reorder pages just to fake the active tab.
+`#` no emphasis; `##` weak; `###` normal; `####` strong; `#####` collapsible; `######` popup (preview: expandable section). Groups and pages can nest. Tabs start on the first visible page. A page's `Доступность = Ложь` disables its contents, not its tab; preserve page order and disclose unsupported initial states.
 
 ## Tables
 
@@ -89,17 +75,10 @@ Indent children consistently with two spaces. An unindented group/page ends the 
 | Товар | Количество | Цена |
 | --- | ---: | ---: |
 | Стол | 2 | 15000 |
-| Стул | 4 | 3000 |
+| . Дочерняя строка | 1 | 3000 |
 ```
 
-The header separator row is required. `:---`, `:---:`, `---:` set alignment. Cells support `[X]` / `[ ]`. Leading dots indicate tree depth:
-
-```text
-| Наименование | Значение |
-| --- | --- |
-| Группа | |
-| . Дочерняя строка | 10 |
-```
+The separator row is required. `:---`, `:---:`, `---:` align columns. Cells support `[X]` / `[ ]`; leading dots set tree depth (preview: indentation without collapse). Column types are inferred from populated cells; mixed text falls back to string. Set header types explicitly for identifiers or important constraints: `Код {Тип = Строка(6)}`.
 
 Grouped headers:
 
@@ -110,7 +89,7 @@ Grouped headers:
 | 001 | Пример |
 ```
 
-Without hyphens around the parent header, child headers define multilevel data rows rather than a pure column group. Each logical record then requires all of its physical lines, including empty continuation lines; an incomplete final record is rejected:
+Without hyphens around the parent header, it also holds data in a separate physical line:
 
 ```text
 | Заказ ||
@@ -120,36 +99,24 @@ Without hyphens around the parent header, child headers define multilevel data r
 | Стол | 2 |
 ```
 
-Cells edit locally. Tree rows are indented without expand/collapse. Preserve empty cells used for spans; do not put multiple values into the same merged column. Extra nonempty cells are rejected. Visually verify complex nesting. Set column types explicitly in headers when important, e.g. `Код {Тип = Строка(6)}`: do not rely on upstream's documented automatic column inference, which is not reliable in the bundled parser.
+Every logical record needs all physical lines, including empty continuations. Preserve empty cells for spans; extra nonempty cells and incomplete records are rejected. Cells edit locally. Inspect complex headers and nesting visually.
 
-## Properties and parsing limits
+## Properties, alignment and colors
 
-Properties use `{Имя = Значение; Другое = Значение}` with `;` separators. Types may have parameters and alternatives: `{Тип = Строка(100), Число(15, 2)}`. Supported interaction properties include `Видимость = Ложь`, `Доступность = Ложь`, `ТолькоПросмотр = Истина`, and `КнопкаПоУмолчанию = Истина`. The renderer normalizes explicit string booleans and shorthand boolean values.
+Properties use `{Имя = Значение; Другое = Значение}`. Keys are case-insensitive; explicit values override shorthand. Common states: `Видимость = Ложь`, `Доступность = Ложь`, `ТолькоПросмотр = Истина`. Parent read-only state propagates to descendants. `ПоложениеЗаголовка = Нет` hides a field caption.
 
-Place inline properties after their element. To target a table or command bar as a whole, put a standalone property line immediately **before** it at the same indentation; a trailing property line may be silently discarded:
+Inline properties follow their element. Properties for a whole table/command bar go on a standalone line **before** it at the same indentation; a trailing line may be discarded:
 
 ```text
 {ТолькоПросмотр = Истина}
-| Код {Тип = Строка(6)} | Сумма {Тип = Число(15, 2)} |
+| Код {Тип = Строка(6)} | Сумма |
 | --- | ---: |
 | 000001 | 123.45 |
 ```
 
-Property keys are case-insensitive; explicit values override shorthand. Read-only state propagates through form/group descendants and table column groups; a child cannot re-enable editing under a read-only parent. Use `ПоложениеЗаголовка = Нет` to hide a field caption. Unknown or context-inappropriate properties may parse successfully without being rendered; `data-warnings` is not exhaustive, so also compare visible states.
+Alignment: `-> Справа`, `-> По центру <-`. A trailing `->` requests stretch upstream; preview approximates sizing. Spaces/underscores do not guarantee widths.
 
-Alignment uses `-> Справа` and `-> По центру <-`. A trailing `->` requests horizontal stretch upstream; preview does not reproduce platform sizing. Underscores/spaces do not guarantee exact widths.
-
-`# / + & | < > { } _` are structural. Quotes do **not** escape them. Check phone numbers containing `+`, URLs with `/`, and text with `&`, `_`, or `|`: a successful parse may still change the hierarchy. Verify the tree and preview; agree on or disclose approximations instead of silently replacing meaningful text.
-
-The adapter preserves quotes and typographic punctuation that upstream dropped; structural grammar is unchanged. Such text may not survive in original upstream. Unknown characters and parse errors stop validation with diagnostics.
-
-Examples: [order](../../../prototypes/order.md), [counterparty](../../../prototypes/counterparty.md). After edits, run `--check`, inspect the form, and read `data-warnings`.
-
-## Colors and table swatches
-
-`ЦветФона` and `ЦветТекста` accept `#RRGGBB` or supported names, e.g. `Коралловый`, `Зеленый`. Prefer hex for exact colors. These properties also apply to cells; individual cells may use `ТолькоПросмотр = Истина`.
-
-`ЦветОбразца` is a **local playground extension**, not a 1C platform property. It renders an editable swatch beside cell text:
+`ЦветФона` / `ЦветТекста` accept `#RRGGBB` or supported names such as `Коралловый`, `Зеленый`; prefer hex. Cells also support colors and read-only state. `ЦветОбразца` is a **local extension**, not a 1C property:
 
 ```text
 | Цвет |
@@ -157,4 +124,10 @@ Examples: [order](../../../prototypes/order.md), [counterparty](../../../prototy
 | Бордовый {ЦветОбразца = #b65b6a} |
 ```
 
-Upstream may preserve this property without rendering a swatch. See [pricing zones](../../../prototypes/pricing-zones.md). Boundaries edit locally; rules in captions do not run calculations. Date fields need `__В` for a calendar; otherwise they render as plain input.
+## Fidelity limits
+
+`# / + & | < > { } _` are structural; quotes do **not** escape them. Check phone numbers with `+`, URLs, and literal `&`, `_`, `|`: parsing can succeed while changing structure. Disclose necessary approximations; never silently replace meaningful text. Typographic punctuation and hex colors are plugin extensions to upstream parsing.
+
+Unknown/context-inappropriate properties can parse without rendering. Inspect `#preview[data-warnings]` and visible states; diagnostics are not exhaustive. Layout approximates 1C; browser values, command captions and rules do not create business logic.
+
+Examples: [order](../../../prototypes/order.md), [counterparty](../../../prototypes/counterparty.md), [colors](../../../prototypes/pricing-zones.md).

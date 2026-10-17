@@ -239,3 +239,34 @@ test("showcase covers six pages, switches, segmented radios, menus and multiline
   expect(multiline.querySelectorAll('tbody td[colspan="2"]')).toHaveLength(2)
   expect(multiline.textContent).toContain('Стул')
 })
+
+test("calendar respects date parts for empty values and accepts documented short dates and hours", ({ onTestFinished }) => {
+  // jsdom does not implement the native modal API.
+  const original = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, "showModal")
+  Object.defineProperty(HTMLDialogElement.prototype, "showModal", { configurable: true, value() { this.open = true } })
+  onTestFinished(() => {
+    if (original) Object.defineProperty(HTMLDialogElement.prototype, "showModal", original)
+    else Reflect.deleteProperty(HTMLDialogElement.prototype, "showModal")
+    document.querySelectorAll("dialog").forEach(dialog => dialog.remove())
+  })
+  for (const [text, type, value, picked, result] of [
+    ['Дата: __В {Тип = Дата}', 'date', '', '2026-10-18', '18.10.2026'],
+    ['Время: __В {Тип = Дата(Время)}', 'time', '', '09:30:15', '09:30:15'],
+    ['Момент: __В {Тип = Дата(ДатаВремя)}', 'datetime-local', '', '2026-10-18T09:30:15', '18.10.2026 09:30:15'],
+    ['Дата: 17.10.26__В', 'date', '2026-10-17', '2026-10-18', '18.10.2026'],
+    ['Время: 9:30__В', 'time', '09:30:00', '10:45:00', '10:45:00'],
+    ['Момент: 17.10.26 9:30__В', 'datetime-local', '2026-10-17T09:30', '2026-10-18T09:30:15', '18.10.2026 09:30:15'],
+  ]) {
+    const c = render(text)
+    const source = c.querySelector<HTMLInputElement>('input')!
+    c.querySelector<HTMLButtonElement>('.preview-adornment')!.click()
+    const dialog = document.querySelector('dialog')!
+    const picker = dialog.querySelector('input')!
+    expect(picker.type).toBe(type)
+    expect(picker.value).toBe(value)
+    picker.value = picked
+    dialog.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }))
+    expect(source.value).toBe(result)
+    dialog.remove()
+  }
+})

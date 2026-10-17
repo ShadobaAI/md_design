@@ -24,7 +24,7 @@ export class TypeProcessor {
 
       result.types.push(resultType)
 
-      const processor = this.getTypeProcessor(type)
+      const processor = this.getTypeProcessor(aliase)
       if (processor) {
         processor(result, typeInfo)
       }

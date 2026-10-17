@@ -1,4 +1,5 @@
 import { BaseElement, FormElement, InputElement, CommandBarElement, ButtonElement, ButtonGroupElement, OneLineGroupElement, TableElement, TableColumnGroupElement, TableColumnElement, TableRowElement, CheckboxElement, RadioButtonElement, LabelElement, HorizontalGroupElement, VerticalGroupElement, PagesElement, PageElement } from "@/elements"
+import { format, isValid, parse } from "date-fns"
 
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", text = ""): HTMLElementTagNameMap[K] {
   const element = document.createElement(tag)
@@ -261,12 +262,18 @@ function renderContent(e: BaseElement, warnings: Set<string>): HTMLElement {
         const fieldLabel = node("label", "preview-field", caption(e))
         const field = node("input"); field.value = input.value
         if (property === "date") {
-          const match = input.value.match(/^(\d{2})\.(\d{2})\.(\d{4})(?: (\d{1,2}:\d{2}(?::\d{2})?))?$/)
-          if (/^\d{1,2}:\d{2}(?::\d{2})?$/.test(input.value)) {
-            field.type = "time"; field.step = "1"; field.value = input.value.split(":").map(part => part.padStart(2, "0")).join(":")
-          } else {
-            field.type = match?.[4] ? "datetime-local" : "date"; field.step = "1"
-            field.value = match ? `${match[3]}-${match[2]}-${match[1]}${match[4] ? "T" + match[4] : ""}` : ""
+          const parts = e.typeDescription.dateFractions.toLowerCase()
+          field.type = parts === "время" ? "time" : parts === "датавремя" ? "datetime-local" : "date"
+          field.step = "1"
+          field.value = ""
+          const dateFormat = /^\d{2}\.\d{2}\.\d{2}(?: |$)/.test(input.value) ? "dd.MM.yy" : "dd.MM.yyyy"
+          const times = ["H:mm:ss", "H:mm"]
+          const formats = field.type === "time" ? times : field.type === "date" ? [dateFormat] : times.map(time => `${dateFormat} ${time}`)
+          for (const pattern of formats) {
+            const date = parse(input.value, pattern, new Date())
+            if (!isValid(date)) continue
+            field.value = format(date, field.type === "time" ? "HH:mm:ss" : field.type === "date" ? "yyyy-MM-dd" : "yyyy-MM-dd'T'HH:mm:ss")
+            break
           }
         }
         fieldLabel.append(field)
@@ -274,10 +281,11 @@ function renderContent(e: BaseElement, warnings: Set<string>): HTMLElement {
         const cancel = node("button", "preview-button", "Отмена"); cancel.type = "button"
         cancel.addEventListener("click", () => dialog.close())
         form.addEventListener("submit", () => {
-          if (property !== "date" || field.type === "time") input.value = field.value
+          if (property !== "date") input.value = field.value
+          else if (field.type === "time") input.value = field.value.replace(/\.\d+$/, "")
           else {
             const [date, time] = field.value.split("T")
-            input.value = date.split("-").reverse().join(".") + (time ? " " + time : "")
+            input.value = date.split("-").reverse().join(".") + (time ? " " + time.replace(/\.\d+$/, "") : "")
           }
         })
         form.append(fieldLabel, accept, cancel); dialog.append(form)

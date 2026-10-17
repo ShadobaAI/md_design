@@ -17,6 +17,7 @@ FILES = [
     ".codex-plugin/plugin.json",
     "skills/md-design/SKILL.md",
     "skills/md-design/references/syntax.md",
+    "skills/md-design/references/runtime.md",
     "skills/md-design/references/showcase.md",
     "skills/md-design/references/reconstruction.md",
     "skills/md-design/references/examples.md",

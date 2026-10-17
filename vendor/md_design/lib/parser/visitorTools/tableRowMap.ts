@@ -70,6 +70,8 @@ export class TableRowMap {
     }
 
     this.currentRow.items.set(column, item)
+    // Collect values for the documented automatic column type inference.
+    this.headerCells.get(column)?.push(item)
 
     this.headerMap.nextColumn()
   }
