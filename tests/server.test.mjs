@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { startServer, readPrototype } from '../scripts/server.mjs'
+import { startServer, readPrototype, prototypeFromText } from '../scripts/server.mjs'
 import http from 'node:http'
 import { pathToFileURL } from 'node:url'
 const dist = process.env.MD_DESIGN_DIST ? pathToFileURL(process.env.MD_DESIGN_DIST.replace(/\\/g, '/') + '/') : new URL('../dist/', import.meta.url)
@@ -41,4 +41,22 @@ test('read limit is enforced', async t => {
   const file = join(directory, 'large.md')
   await writeFile(file, 'x'.repeat(200001))
   await assert.rejects(readPrototype(file), /лимит/)
+})
+
+test('memory previews update without a file and reject invalid, oversized or cross-origin writes', async t => {
+  const { server, url } = await startServer({ source: { text: 'Первая', name: 'форма.md' }, dist, validate: text => { if (text === 'invalid') throw new Error('Invalid DSL') } })
+  t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve) }))
+  const headers = { 'Content-Type': 'text/plain; charset=utf-8', 'X-MD-Design-Update': '1' }
+  assert.deepEqual(await (await fetch(url + 'prototype')).json(), { text: 'Первая', name: 'форма.md' })
+  assert.equal((await fetch(url + 'prototype', { method: 'PUT', headers, body: 'Вторая' })).status, 204)
+  assert.equal((await (await fetch(url + 'prototype')).json()).text, 'Вторая')
+  for (const body of ['invalid', 'x'.repeat(200001), 'x'.repeat(800001)]) {
+    assert.equal((await fetch(url + 'prototype', { method: 'PUT', headers, body })).status, 400)
+    assert.equal((await (await fetch(url + 'prototype')).json()).text, 'Вторая')
+  }
+  assert.equal((await fetch(url + 'prototype', { method: 'PUT', body: 'Подмена' })).status, 403)
+  assert.equal((await fetch(url + 'prototype', { method: 'PUT', headers: { ...headers, Origin: 'https://evil.example' }, body: 'Подмена' })).status, 403)
+  assert.equal((await fetch(url + 'preview.css', { method: 'PUT', headers, body: 'Подмена' })).status, 405)
+  assert.equal((await (await fetch(url + 'prototype')).json()).text, 'Вторая')
+  assert.throws(() => prototypeFromText('я'.repeat(400001)), /800 000/)
 })

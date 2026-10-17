@@ -4,7 +4,21 @@ Commands use absolute paths and work from any directory. `--check` validates wit
 
 If `node` is absent from PATH, call `mcp__codex_app__load_workspace_dependencies` and use the returned Node executable.
 
-`--background` returns JSON with `url`, `pid`, and `file`. Each instance listens on a free port at `127.0.0.1`; use the complete URL including its random path. Wait for readiness and verify loading after the launcher exits. Startup JSON alone does not prove continued availability.
+`--stdin --background` returns JSON with `url`, `pid`, `name`, and `storage: "memory"`. Source passes to the background server through a pipe and stays in memory; no staging files are created. `--stdin --update <complete-url>` replaces the source in that running server. It accepts only a tokenized local preview URL and validates before replacing the source. Each instance listens on a free port at `127.0.0.1`; use the complete URL including its random path. Wait for readiness and verify loading after the launcher exits. Startup JSON alone does not prove continued availability.
+
+In PowerShell, set the pipeline encoding explicitly before piping a here-string with Cyrillic text:
+
+```powershell
+$OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+@'
+--- Новая форма ---
+Номер: 123
+'@ | node "<plugin>/scripts/preview.mjs" --stdin --name "form.md" --background
+```
+
+Use the same pipe with `--check` for validation or `--update "<complete-preview-url>"` for revisions. In POSIX shells, pipe a quoted UTF-8 heredoc. `--file <absolute-path>` remains available for an explicitly supplied existing file or bundled examples; it reads the file without copying it, and file edits refresh that preview. A file-backed preview cannot be updated with `--update`.
+
+The download/copy icon menus generate HTML, MD, or PNG only on selection. HTML is a self-contained interactive page, MD is the DSL source, and PNG is the displayed form without the toolbar. Clipboard access depends on browser permission; failures are shown beside the icons. There is no automatic export or screenshot capture. Source is lost when a memory server stops; rebuild from the conversation or a user-exported MD if necessary.
 
 ## Windows sandbox
 

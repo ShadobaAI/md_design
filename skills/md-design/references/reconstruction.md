@@ -4,7 +4,7 @@
 
 Inspect the source image. Preserve form bounds, command bar, columns, groups, tabs, control order, caption placement, aligned field edges, values and visible states. Hidden tab contents are unknown. Ask about important unreadable text; disclose minor approximations and invented sample values outside the form.
 
-Compare the preview screenshot with the source for placement, proportions, text and selected states. Edit the `.md`, not the DOM. Keep technical notes and controls absent from the source out of the form. For initial tab states and empty date/time fields, see [syntax](syntax.md).
+Compare the preview's DOM structure, values and selected states with the source; let the user review the visual result without automatically creating a screenshot. Revise the DSL source via `--stdin --update`, not the DOM. Keep technical notes and controls absent from the source out of the form; the export icons remain above it. For initial tab states and empty date/time fields, see [syntax](syntax.md).
 
 ## XML
 

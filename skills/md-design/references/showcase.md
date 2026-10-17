@@ -1,6 +1,6 @@
 # Feature tour: showcase.md
 
-[Source](../../../prototypes/showcase.md). This example covers md_design's **GUI description** constructs. Upstream visual editors, BSL scripting, AI chat, configuration export, and copying browser values back into source are not plugin capabilities. Edit the workspace `.md` to persist changes.
+[Source](../../../prototypes/showcase.md). This example covers md_design's **GUI description** constructs. Upstream visual editors, BSL scripting, AI chat, configuration export, and copying browser values back into DSL source are not plugin capabilities. Revise the source in memory with `--stdin --update`. The user can download or copy HTML, MD, or PNG at any point using the export icon menus.
 
 | Tab caption in the example | Coverage |
 | --- | --- |
