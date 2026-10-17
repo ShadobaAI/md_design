@@ -8,10 +8,10 @@ Codex сохраняет описание формы в `.md` и открыва�
 
 Для работы нужны **Codex** и **Node.js 22+** в PATH. Проверь `node --version`; установить Node.js можно с [официального сайта](https://nodejs.org/en/download). После установки Node.js перезапусти Codex.
 
-Добавь [репозиторий](https://github.com/ShadobaAI/md_design) как Git marketplace в управлении плагинами Codex и установи **Накидку** из ветки `main`. Затем начни новый чат. Через Codex CLI это можно сделать так:
+Добавь [marketplace](https://github.com/ShadobaAI/md_design-mkt) в управлении плагинами Codex и установи **Накидку**. Затем начни новый чат. Через Codex CLI это можно сделать так:
 
 ```powershell
-codex plugin marketplace add ShadobaAI/md_design
+codex plugin marketplace add ShadobaAI/md_design-mkt
 codex plugin add md-design@shadobaai-md-design
 ```
 
@@ -52,10 +52,10 @@ codex plugin marketplace upgrade shadobaai-md-design
 
 [build-plugin.yml](.github/workflows/build-plugin.yml) запускается только:
 
-- при отправке стабильного тега версии, например `1.0.0`;
+- при отправке стабильного тега версии, например `0.1.0`;
 - на pull request — для проверки того же пакета, без публикации.
 
-Обычный push ветки не запускает CI. Версии имеют формат `MAJOR.MINOR.PATCH`, без префикса, ведущих нулей и суффиксов. Тег обязан точно совпадать с версиями `package.json`, `package-lock.json` и `.codex-plugin/plugin.json`; контракт проверяется до установки зависимостей.
+Обычный push ветки не запускает CI. Версии имеют формат `MAJOR.MINOR.PATCH`, без префикса, ведущих нулей и суффиксов. Единственный источник версии релиза — Git-тег. При упаковке CI записывает его в манифест готового плагина, метаданные и имена ZIP; в исходных манифестах версия проекта не хранится. Формат тега проверяется до установки зависимостей. На pull request пакет проверяется с наибольшей версией из тегов в истории коммита, без публикации.
 
 Конвейер выполняет `npm ci`, audit, typecheck, сборку, тесты визуализации/HTTP и тесты упаковки. JS минифицирован, source maps не создаются и не входят в пакет. Пакет проверяется без npm-зависимостей на Ubuntu и Windows с Node.js 22 и 24. Публикация ждёт успешного завершения всей матрицы.
 
@@ -65,24 +65,30 @@ codex plugin marketplace upgrade shadobaai-md-design
 - `md-design-<версия>-marketplace.zip` — тот же пакет с каталогом marketplace;
 - `SHA256SUMS` — контрольные суммы обоих ZIP.
 
-Артефакты Actions хранятся 14 дней. Опубликованный пакет остаётся в `main` и доступен независимо от срока хранения артефактов.
+Артефакты Actions хранятся 14 дней. Опубликованный пакет остаётся в ветке `main` репозитория [md_design-mkt](https://github.com/ShadobaAI/md_design-mkt) и доступен независимо от срока хранения артефактов. CI не делает push в репозиторий исходников `md_design`.
+
+Перед первой публикацией настрой доступ:
+
+1. Создай fine-grained personal access token с доступом **только к `ShadobaAI/md_design-mkt`** и разрешением **Contents: Read and write**.
+2. В репозитории `ShadobaAI/md_design` добавь его как Actions secret **`MARKETPLACE_TOKEN`**: **Settings → Secrets and variables → Actions → New repository secret**.
+3. Правила ветки `main` в `md_design-mkt` должны разрешать push владельцу токена. Пустой репозиторий CI инициализирует при первой публикации; вручную создавать в нём файлы не нужно.
 
 Для релиза:
 
 1. Сначала отправь исходники и оба workflow в `main`.
-2. Согласуй версию в трёх манифестах. Создай и отправь тег на этом коммите:
+2. Создай и отправь тег нужной версии на этом коммите:
 
    ```powershell
-   git tag 1.0.0
-   git push origin 1.0.0
+   git tag 0.1.0
+   git push origin 0.1.0
    ```
 
 3. Дождись успешных **Build md-design plugin** и **Publish md-design marketplace**. Публикация стартует автоматически через `workflow_run`; ID сборки передаётся без ручного ввода.
-4. Готовый пакет `plugins/md-design` и `.agents/plugins/marketplace.json` появятся одним коммитом в `main`. Каталог станет доступен для установки плагина (`AVAILABLE`). До первой публикации он помечен `NOT_AVAILABLE`, поскольку runtime ещё не добавлен.
+4. Готовый пакет `plugins/md-design` и `.agents/plugins/marketplace.json` появятся одним коммитом в `main` репозитория `md_design-mkt`. Каталог будет доступен для установки плагина (`AVAILABLE`). Файл `.agents/plugins/marketplace.json` в исходниках служит шаблоном для упаковки; пользователи устанавливают плагин из `md_design-mkt`.
 
-[publish-marketplace.yml](.github/workflows/publish-marketplace.yml) использует правила из основной ветки и встроенный `GITHUB_TOKEN`. Право `contents: write` запрашивается только публикационной job; глобальные права можно оставить read-only. Правила `main` должны разрешать её push. Дополнительные secrets/PAT не нужны.
+[publish-marketplace.yml](.github/workflows/publish-marketplace.yml) использует правила из `main` репозитория исходников. Встроенный `GITHUB_TOKEN` имеет только права чтения исходников и артефактов. Для записи в отдельный marketplace используется `MARKETPLACE_TOKEN`: встроенный токен [ограничен репозиторием своего workflow](https://docs.github.com/en/actions/concepts/security/github_token).
 
-Перед публикацией проверяются источник workflow, репозиторий, успешность всего прогона, версия, commit, SHA-256, соответствие двух ZIP и безопасные пути файлов. Фактический тег должен по-прежнему указывать на собранный commit из `main`. Неполные сборки, сборки с незакоммиченными изменениями, prerelease, PR, несоответствующие теги и откат версии отклоняются. Код из скачанного пакета с write-токеном не исполняется.
+Перед публикацией проверяются источник workflow, репозиторий, успешность всего прогона, версия, commit, SHA-256, соответствие двух ZIP и безопасные пути файлов. Фактический тег должен по-прежнему указывать на собранный commit из `main` репозитория исходников. История версий также проверяется по исходникам, отдельно от истории коммитов marketplace. Неполные сборки, сборки с незакоммиченными изменениями, prerelease, PR, несоответствующие теги и откат версии отклоняются. Код из скачанного пакета с write-токеном не исполняется.
 
 Публикации идут последовательно с очередью; force push не используется. Повторная публикация того же commit и версии ничего не меняет. При сбое можно повторить публикационный workflow либо вручную запустить **Run workflow** с `build_run_id` успешной сборки тега.
 
@@ -95,11 +101,11 @@ npm.cmd ci
 npm.cmd run build
 npm.cmd test
 python -m unittest discover -s tests -p "test_*.py"
-npm.cmd run package:plugin
+npm.cmd run package:plugin -- --version 0.1.0
 npm.cmd run check:plugin
 ```
 
-Локальный marketplace находится в `.build/marketplace`. Сборка очищает корневой `dist`, упаковка пересоздаёт только `.build` и включает явный список файлов. Чистота исходников и commit записываются в metadata пакета; незакоммиченные локальные пакеты не публикуются.
+Локальный marketplace находится в `.build/marketplace`. Параметр `--version` задаёт версию только для локальной проверки; без него используется наибольшая версия из тегов в истории коммита. В CI релиза версия всегда берётся из запускающего тега. Сборка очищает корневой `dist`, упаковка пересоздаёт только `.build` и включает явный список файлов. Чистота исходников и commit записываются в metadata пакета; незакоммиченные локальные пакеты не публикуются.
 
 Ручная проверка и запуск предпросмотра из исходников:
 

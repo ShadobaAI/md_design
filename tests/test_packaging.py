@@ -3,6 +3,7 @@ import hashlib
 import json
 import tempfile
 import subprocess
+import shutil
 import io
 from contextlib import redirect_stdout
 import unittest
@@ -51,9 +52,12 @@ class PackagingTests(unittest.TestCase):
     def info(self, profile):
         (self.root / "dist/build-info.json").write_text(json.dumps({"profile": profile}), encoding="utf-8")
 
-    def package(self):
-        with patch.object(packager, "ROOT", self.root), patch.object(packager.subprocess, "check_output", side_effect=["a" * 40, ""]), redirect_stdout(io.StringIO()):
-            packager.package(self.root / ".build")
+    def package(self, version="0.1.0", environment=None, revision="a" * 40):
+        with patch.dict(packager.os.environ, environment or {"GITHUB_ACTIONS": ""}), \
+                patch.object(packager, "ROOT", self.root), \
+                patch.object(packager.subprocess, "check_output", side_effect=[revision, ""]), \
+                redirect_stdout(io.StringIO()):
+            packager.package(self.root / ".build", version)
         return self.root / ".build"
 
     def test_production_roundtrip_excludes_checkout_dependencies_and_local_notes(self):
@@ -74,12 +78,15 @@ class PackagingTests(unittest.TestCase):
         verifier.verify(output, self.root / "unpacked")
         self.assertFalse((self.root / "unpacked/plugins/md-design/dist/playground.js.map").exists())
 
-    def test_version_mismatch_fails_before_output_deletion(self):
-        manifest = json.loads((self.root / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
-        manifest["version"] = "0.0.1"
-        (self.root / ".codex-plugin/plugin.json").write_text(json.dumps(manifest))
-        with self.assertRaisesRegex(ValueError, "versions differ"):
-            self.package()
+    def test_invalid_version_fails_before_output_deletion(self):
+        output = self.root / ".build"
+        output.mkdir()
+        sentinel = output / "previous.txt"
+        sentinel.write_text("previous package")
+        for version in ["v0.1.0", "0.1.0-rc.1", "../escape", "01.0.0", ""]:
+            with self.subTest(version=version), self.assertRaises(ValueError):
+                self.package(version)
+            self.assertEqual(sentinel.read_text(), "previous package")
 
     def test_missing_runtime_fails(self):
         (self.root / "dist/parser.mjs").unlink()
@@ -142,16 +149,125 @@ class PackagingTests(unittest.TestCase):
                     verifier.verify(output, destination)
                 self.assertFalse(destination.exists())
 
-    def test_version_contract_checks_all_manifests_and_tag(self):
-        self.assertEqual(policy.validate_tag(self.root, "1.0.0"), "1.0.0")
-        for tag in ["v1.0.0", "1.0.1", "1.0.0-rc.1"]:
+    def test_source_manifests_must_remain_versionless(self):
+        policy.read_source_manifest(self.root)
+        for file, nested in [(".codex-plugin/plugin.json", False), ("package.json", False),
+                             ("package-lock.json", False), ("package-lock.json", True)]:
+            path = self.root / file
+            original = path.read_bytes()
+            data = json.loads(original)
+            target = data["packages"][""] if nested else data
+            target["version"] = "0.1.0"
+            path.write_text(json.dumps(data), encoding="utf-8")
+            with self.subTest(file=file, nested=nested), self.assertRaisesRegex(ValueError, "must not contain a version"):
+                self.package()
+            path.write_bytes(original)
+
+    def test_tag_sets_deliverable_version_without_modifying_source(self):
+        source = self.root / ".codex-plugin/plugin.json"
+        original = source.read_bytes()
+        environment = {"GITHUB_ACTIONS": "true", "GITHUB_REF_TYPE": "tag", "GITHUB_REF_NAME": "0.2.3"}
+        output = self.package(version=None, environment=environment)
+        build = verifier.verify(output, self.root / "unpacked")
+        self.assertEqual(build["version"], "0.2.3")
+        self.assertEqual(source.read_bytes(), original)
+        self.assertNotIn("version", json.loads(original))
+        self.assertEqual({file.name for file in output.glob("*.zip")},
+                         {"md-design-0.2.3.zip", "md-design-0.2.3-marketplace.zip"})
+
+    def test_release_tag_cannot_be_overridden_and_invalid_tags_are_rejected(self):
+        environment = {"GITHUB_ACTIONS": "true", "GITHUB_REF_TYPE": "tag", "GITHUB_REF_NAME": "0.2.3"}
+        with self.assertRaisesRegex(ValueError, "triggering Git tag"):
+            self.package(version="9.0.0", environment=environment)
+        for tag in ["v0.2.3", "0.2.3-rc.1", "main", "0.2"]:
             with self.subTest(tag=tag), self.assertRaises(ValueError):
-                policy.validate_tag(self.root, tag)
-        lock = json.loads((self.root / "package-lock.json").read_text(encoding="utf-8"))
-        lock["packages"][""]["version"] = "2.0.0"
-        (self.root / "package-lock.json").write_text(json.dumps(lock))
-        with self.assertRaisesRegex(ValueError, "versions differ"):
-            self.package()
+                self.package(version=None, environment={**environment, "GITHUB_REF_NAME": tag})
+
+    def test_pr_and_local_default_use_only_stable_tags_in_history(self):
+        with patch.dict(packager.os.environ, {"GITHUB_ACTIONS": "true", "GITHUB_REF_TYPE": "branch"}), \
+                patch.object(policy.subprocess, "check_output", return_value="0.2.0\n0.10.0\nv9.0.0\n1.0.0-rc.1\n") as calls:
+            self.assertEqual(policy.resolve_version(self.root), "0.10.0")
+            calls.assert_called_once_with(["git", "tag", "--merged", "HEAD"], cwd=self.root, text=True)
+        with patch.dict(packager.os.environ, {"GITHUB_ACTIONS": ""}), \
+                patch.object(policy.subprocess, "check_output", return_value=""):
+            with self.assertRaisesRegex(ValueError, "No stable Git tag"):
+                policy.resolve_version(self.root)
+            self.assertEqual(policy.resolve_version(self.root, "0.1.0"), "0.1.0")
+
+    def test_publication_writes_only_to_separate_marketplace_including_first_commit(self):
+        source = self.root / "source-origin"
+        marketplace = self.root / "marketplace-origin.git"
+        real_run = publisher.run
+        real_run("git", "init", "--quiet", "--initial-branch=main", str(source))
+        real_run("git", "init", "--quiet", "--bare", str(marketplace))
+        identity = ["git", "-c", "user.name=CI", "-c", "user.email=ci@example.test"]
+        record = {"repository": {"full_name": publisher.REPOSITORY},
+                  "head_repository": {"full_name": publisher.REPOSITORY},
+                  "path": ".github/workflows/build-plugin.yml", "event": "push", "conclusion": "success"}
+        pushes = []
+
+        def github_run(*args, cwd=None, env=None):
+            if args[:2] == ("gh", "api"):
+                return json.dumps(record)
+            if args[:3] == ("gh", "auth", "setup-git"):
+                return ""
+            if args[:3] == ("gh", "run", "download"):
+                destination = Path(args[args.index("--dir") + 1])
+                destination.mkdir(parents=True)
+                for file in output.iterdir():
+                    if file.is_file():
+                        shutil.copyfile(file, destination / file.name)
+                return ""
+            if args[:2] == ("git", "clone"):
+                url = args[-2]
+                if url == f"https://github.com/{publisher.REPOSITORY}.git":
+                    self.assertIsNone(env)  # Built-in source token only.
+                    args = (*args[:-2], str(source), args[-1])
+                else:
+                    self.assertEqual(url, f"https://github.com/{publisher.MARKETPLACE_REPOSITORY}.git")
+                    self.assertEqual(env["GH_TOKEN"], "marketplace-write-token")
+                    args = (*args[:-2], str(marketplace), args[-1])
+            if args[:2] == ("git", "push"):
+                self.assertEqual(Path(cwd).name, "catalog")
+                self.assertEqual(env["GH_TOKEN"], "marketplace-write-token")
+                pushes.append(args)
+            return real_run(*args, cwd=cwd, env=env)
+
+        for number, version in enumerate(["0.1.0", "0.2.0"], 1):
+            (source / "file.txt").write_text(version)
+            real_run("git", "add", "file.txt", cwd=source)
+            real_run(*identity, "commit", "-qm", version, cwd=source)
+            revision = real_run("git", "rev-parse", "HEAD", cwd=source)
+            real_run("git", "tag", version, cwd=source)
+            record.update(head_branch=version, head_sha=revision, id=number)
+            output = self.package(version=version, revision=revision,
+                                  environment={"GITHUB_ACTIONS": "", "GITHUB_RUN_ID": str(number)})
+            with patch.dict(publisher.os.environ, {"GITHUB_REPOSITORY": publisher.REPOSITORY,
+                            "GH_TOKEN": "source-read-token", "MARKETPLACE_TOKEN": "marketplace-write-token"}), \
+                    patch.object(publisher, "run", side_effect=github_run):
+                publisher.publish(number, self.root / f"publication-{number}")
+            manifest = json.loads(real_run("git", "show", "main:plugins/md-design/.codex-plugin/plugin.json", cwd=marketplace))
+            self.assertEqual(manifest["version"], version)
+            self.assertEqual(real_run("git", "rev-parse", "HEAD", cwd=source), revision)
+        self.assertEqual(len(pushes), 2)
+        published = real_run("git", "rev-parse", "main", cwd=marketplace)
+        with patch.dict(publisher.os.environ, {"GITHUB_REPOSITORY": publisher.REPOSITORY,
+                        "MARKETPLACE_TOKEN": "marketplace-write-token"}), \
+                patch.object(publisher, "run", side_effect=github_run):
+            publisher.publish(2, self.root / "publication-repeat")
+        self.assertEqual(real_run("git", "rev-parse", "main", cwd=marketplace), published)
+        self.assertEqual(len(pushes), 2)
+
+        record.update(head_branch="0.1.0", head_sha=real_run("git", "rev-parse", "0.1.0", cwd=source), id=1)
+        output = self.package(version="0.1.0", revision=record["head_sha"],
+                              environment={"GITHUB_ACTIONS": "", "GITHUB_RUN_ID": "1"})
+        with patch.dict(publisher.os.environ, {"GITHUB_REPOSITORY": publisher.REPOSITORY,
+                        "MARKETPLACE_TOKEN": "marketplace-write-token"}), \
+                patch.object(publisher, "run", side_effect=github_run), \
+                self.assertRaisesRegex(ValueError, "roll back"):
+            publisher.publish(1, self.root / "publication-rollback")
+        self.assertEqual(real_run("git", "rev-parse", "main", cwd=marketplace), published)
+        self.assertEqual(len(pushes), 2)
 
 
 class PublicationTests(unittest.TestCase):
@@ -183,6 +299,13 @@ class PublicationTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     publisher.publish(123, ROOT / ".test-tmp/not-used-publication")
                 calls.assert_called_once_with("gh", "api", f"repos/{publisher.REPOSITORY}/actions/runs/123")
+
+    def test_missing_marketplace_token_fails_before_download_or_write(self):
+        with patch.dict(publisher.os.environ, {"GITHUB_REPOSITORY": publisher.REPOSITORY, "MARKETPLACE_TOKEN": ""}), \
+                patch.object(publisher, "run", return_value=json.dumps(self.record())) as calls:
+            with self.assertRaisesRegex(ValueError, "MARKETPLACE_TOKEN"):
+                publisher.publish(123, ROOT / ".test-tmp/not-used-publication")
+            calls.assert_called_once_with("gh", "api", f"repos/{publisher.REPOSITORY}/actions/runs/123")
 
     def test_nonproduction_dirty_or_unrelated_artifacts_are_rejected(self):
         build = {"profile": "release", "dirty": False, "revision": "a" * 40, "version": "1.0.0", "runId": "123"}

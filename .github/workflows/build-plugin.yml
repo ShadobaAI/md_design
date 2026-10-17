@@ -21,6 +21,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # PR package checks resolve an existing stable tag from Git history.
+          fetch-depth: 0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
@@ -28,19 +30,20 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
-      - name: Validate production version
-        run: python scripts/release_policy.py
-      - name: Validate release tag
-        if: github.ref_type == 'tag'
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: python scripts/release_policy.py --tag "$RELEASE_TAG"
+      - name: Resolve package version from Git tag
+        id: version
+        run: |
+          version="$(python scripts/release_policy.py)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - run: npm ci
       - run: npm audit --audit-level=high
       - run: npm run build
       - run: npm test
       - run: python -m unittest discover -s tests -p 'test_*.py'
-      - run: npm run package:plugin
+      - name: Package plugin with resolved version
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.version }}
+        run: npm run package:plugin -- --version "$PACKAGE_VERSION"
       - run: npm run check:plugin
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -53,7 +56,7 @@ jobs:
       - name: Build summary
         run: |
           echo 'Plugin ZIP, local marketplace ZIP and SHA256SUMS are in md-design-plugin.' >> "$GITHUB_STEP_SUMMARY"
-          echo 'Production package verified. Successful stable tag builds publish after all smoke jobs pass; PR builds never publish.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Package verified. Successful stable tag builds publish to ShadobaAI/md_design-mkt after all smoke jobs pass; PR builds never publish.' >> "$GITHUB_STEP_SUMMARY"
 
   smoke:
     needs: build

@@ -1,4 +1,4 @@
-"""Promote one verified release build to the marketplace in this repository's main.
+"""Promote one verified source release to the separate marketplace repository.
 
 The calling workflow runs after a successful tag build, or manually for retries.
 Only clean stable releases from this repository may be published.
@@ -15,10 +15,24 @@ from pathlib import Path
 from release_policy import version_key
 
 REPOSITORY = "ShadobaAI/md_design"
+MARKETPLACE_REPOSITORY = "ShadobaAI/md_design-mkt"
 
 
-def run(*args, cwd=None):
-    return subprocess.check_output(args, cwd=cwd, text=True).strip()
+def run(*args, cwd=None, env=None):
+    return subprocess.check_output(args, cwd=cwd, env=env, encoding="utf-8").strip()
+
+
+def clone_marketplace(checkout, environment):
+    # A newly created marketplace may have no commits yet. Only that case may
+    # bootstrap main; an existing repository must already have an origin/main.
+    run("git", "clone", f"https://github.com/{MARKETPLACE_REPOSITORY}.git", str(checkout), env=environment)
+    refs = run("git", "for-each-ref", "--format=%(refname)", "refs/remotes/origin", cwd=checkout).splitlines()
+    if "refs/remotes/origin/main" in refs:
+        run("git", "checkout", "-B", "main", "refs/remotes/origin/main", cwd=checkout)
+    elif refs:
+        raise ValueError("Marketplace must have a main branch or be empty")
+    else:
+        run("git", "symbolic-ref", "HEAD", "refs/heads/main", cwd=checkout)
 
 
 def validate_run(record):
@@ -61,6 +75,10 @@ def publish(run_id, work):
         raise ValueError("Publication is restricted to ShadobaAI/md_design")
     record = json.loads(run("gh", "api", f"repos/{REPOSITORY}/actions/runs/{run_id}"))
     validate_run(record)
+    token = os.environ.get("MARKETPLACE_TOKEN")
+    if not token:
+        raise ValueError("MARKETPLACE_TOKEN with Contents write access to ShadobaAI/md_design-mkt is required")
+    marketplace_environment = {**os.environ, "GH_TOKEN": token}
     work.mkdir(parents=True, exist_ok=False)
     download = work / "download"
     run("gh", "run", "download", str(run_id), "--repo", REPOSITORY,
@@ -71,12 +89,16 @@ def publish(run_id, work):
     payload = work / "payload"
     build = module.verify(download, payload)
     validate_build(build, record)
-    # Do not execute scripts from downloaded artifacts with a write token.
+    # Git uses gh's credential helper with the token in each command's env.
+    # The built-in token reads source/artifacts; only target clone/push receives
+    # the separately scoped marketplace credential. No artifact code is run.
     run("gh", "auth", "setup-git")
-    url = f"https://github.com/{REPOSITORY}.git"
+    source = work / "source"
+    run("git", "clone", "--single-branch", "--branch", "main",
+        f"https://github.com/{REPOSITORY}.git", str(source))
+    validate_source_tag(source, build)
     checkout = work / "catalog"
-    run("git", "clone", "--single-branch", "--branch", "main", url, str(checkout))
-    validate_source_tag(checkout, build)
+    clone_marketplace(checkout, marketplace_environment)
     previous_file = checkout / "plugins/md-design/build-info.json"
     if previous_file.exists():
         previous = json.loads(previous_file.read_text(encoding="utf-8"))
@@ -86,8 +108,8 @@ def publish(run_id, work):
         if version_key(build["version"]) <= version_key(previous["version"]):
             raise ValueError("Publication cannot replace or roll back an existing version")
         # Refuse an older/divergent release. No forced pushes or rollback.
-        run("git", "merge-base", "--is-ancestor", previous["revision"], build["revision"], cwd=checkout)
-    # Update only the delivered plugin and catalog, preserving the source tree.
+        run("git", "merge-base", "--is-ancestor", previous["revision"], build["revision"], cwd=source)
+    # Update only the delivered plugin and catalog in the marketplace checkout.
     target = checkout / "plugins/md-design"
     if target.is_symlink() or not target.resolve().is_relative_to(checkout.resolve()):
         raise ValueError("Unsafe plugin destination")
@@ -103,7 +125,7 @@ def publish(run_id, work):
     run("git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com", cwd=checkout)
     stage_catalog(checkout)
     run("git", "commit", "-m", f"Publish md-design {build['version']}", cwd=checkout)
-    run("git", "push", "origin", "HEAD:refs/heads/main", cwd=checkout)
+    run("git", "push", "origin", "HEAD:refs/heads/main", cwd=checkout, env=marketplace_environment)
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ import shutil
 import subprocess
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
-from release_policy import read_version
+from release_policy import read_source_manifest, resolve_version
 
 ROOT = Path(__file__).resolve().parent.parent
 FILES = [
@@ -51,8 +51,9 @@ def archive(directory, destination, prefix=""):
                 output.writestr(info, file.read_bytes())
 
 
-def package(output):
-    version = read_version(ROOT)
+def package(output, version=None):
+    manifest = read_source_manifest(ROOT)
+    version = resolve_version(ROOT, version)
     build = json_read(ROOT / "dist/build-info.json")
     profile = build["profile"]
     if profile != "release":
@@ -77,6 +78,8 @@ def package(output):
         target = plugin / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / relative, target)
+    # Version belongs to the deliverable, never to the checked-in template.
+    json_write(plugin / ".codex-plugin/plugin.json", {**manifest, "version": version})
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=normal"], cwd=ROOT, text=True).strip())
     json_write(plugin / "build-info.json", {
@@ -99,5 +102,6 @@ def package(output):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.parse_args()
-    package(ROOT / ".build")
+    parser.add_argument("--version", help="Version for local packaging; release CI uses its triggering tag")
+    args = parser.parse_args()
+    package(ROOT / ".build", args.version)

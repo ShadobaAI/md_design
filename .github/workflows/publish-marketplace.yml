@@ -2,6 +2,7 @@ name: Publish md-design marketplace
 
 # A release tag builds first; publication waits for the entire run, including
 # the Windows/Linux smoke matrix. Pull requests never publish.
+# Source access stays read-only; only md_design-mkt receives a push.
 on:
   workflow_run:
     workflows: ["Build md-design plugin"]
@@ -37,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write
+      contents: read
       actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -49,8 +50,9 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
-      - name: Verify and publish the exact successful release artifact
+      - name: Verify release artifact and publish to md_design-mkt
         env:
           GH_TOKEN: ${{ github.token }}
+          MARKETPLACE_TOKEN: ${{ secrets.MARKETPLACE_TOKEN }}
           BUILD_RUN_ID: ${{ github.event.workflow_run.id || inputs.build_run_id }}
         run: python scripts/publish-marketplace.py --run-id "$BUILD_RUN_ID" --work "$RUNNER_TEMP/md-design-publication"

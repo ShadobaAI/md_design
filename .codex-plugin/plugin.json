@@ -1,6 +1,5 @@
 {
   "name": "md-design",
-  "version": "1.0.0",
   "description": "Создание интерактивных прототипов форм 1С из текста, скриншотов и XML.",
   "author": { "name": "ShadobaAI" },
   "homepage": "https://github.com/ShadobaAI/md_design",
