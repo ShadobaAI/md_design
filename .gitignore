@@ -1,4 +1,7 @@
-node_modules/
-dist/
-.test-install/
+/node_modules/
+/dist/
+/.test-install/
 *.log
+/.build/
+__pycache__/
+/.test-tmp/

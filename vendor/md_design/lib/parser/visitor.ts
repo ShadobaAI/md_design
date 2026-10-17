@@ -664,32 +664,12 @@ export class Visitor extends BaseVisitor {
   }
 
   private setProperty(element: BaseElement, key: string, value: PropertyValue | undefined) {
-    const properties = element.properties
-
     const cleanedKey = StringUtils.clean(key)
-
     if (!cleanedKey) {
       return
     }
-
-    const lowerKey = cleanedKey.toLowerCase()
-
-    if (!lowerKey) {
-      return
-    }
-
-    for (const prop in properties) {
-      if (prop.toLowerCase() === lowerKey) {
-        properties.delete(prop)
-      }
-    }
-
-    if (value === undefined) {
-      properties.delete(key)
-      return
-    }
-
-    properties.set(cleanedKey, value)
+    // Local patch: Map keys must be compared through BaseElement's normalizer.
+    element.setProperty(cleanedKey, value)
   }
 
   private getTypeDescription(types: any): ITypeDescription {

@@ -51,11 +51,22 @@ export function renderPreview(container: HTMLElement, form: FormElement | undefi
     for (const item of form.items) fragment.append(renderElement(item, warnings))
   }
   container.replaceChildren(fragment)
+  // Reset properties applied on a previous render, then apply the form itself.
+  container.hidden = false
+  container.removeAttribute("inert")
+  container.classList.remove("preview-disabled")
+  for (const key of ["color", "background-color", "background-image", "text-align"]) container.style.removeProperty(key)
+  if (form) applyProperties(form, container, warnings)
   return [...warnings]
 }
 
 function renderElement(e: BaseElement, warnings: Set<string>): HTMLElement {
   const result = renderContent(e, warnings)
+  applyProperties(e, result, warnings)
+  return result
+}
+
+function applyProperties(e: BaseElement, result: HTMLElement, warnings: Set<string>): void {
   result.hidden = booleanProperty(e, "Видимость") === false
   if (booleanProperty(e, "Доступность") === false) {
     result.setAttribute("inert", "")
@@ -77,8 +88,7 @@ function renderElement(e: BaseElement, warnings: Set<string>): HTMLElement {
   if (alignment === "Право") result.style.textAlign = "right"
   // Never inject arbitrary CSS/HTML or silently pretend to support platform properties.
   const supported = new Set(["Заголовок", "Имя", "Видимость", "Доступность", "ТолькоПросмотр", "Тип", "ГоризонтальноеПоложениеВГруппе", "ГоризонтальноеПоложение", "МногострочныйРежим", "Высота", "КнопкаВыбора", "КнопкаВыпадающегоСписка", "КнопкаОчистки", "КнопкаОткрытия", "КнопкаРегулирования", "СписокВыбора", "Отображение", "Поведение", "КнопкаПоУмолчанию", "ПоложениеЗаголовка", "ЦветТекста", "ЦветФона", "ВидФлажка", "ВидПереключателя"])
-  for (const key of e.properties.keys()) if (!supported.has(key)) warnings.add(`«${caption(e) || e.type}»: свойство «${key}» не визуализируется`)
-  return result
+  for (const key of e.properties.keys()) if (![...supported].some(name => name.toLowerCase() === key.toLowerCase())) warnings.add(`«${caption(e) || e.type}»: свойство «${key}» не визуализируется`)
 }
 
 function renderContent(e: BaseElement, warnings: Set<string>): HTMLElement {
@@ -295,7 +305,7 @@ function renderContent(e: BaseElement, warnings: Set<string>): HTMLElement {
       if (children(column).length) { cell.colSpan = leafCount(column); children(column).forEach(child => addColumn(child, level + 1)) }
       else cell.rowSpan = height - level
       headerRows[level].append(cell)
-      for (const key of column.properties.keys()) if (!["Заголовок", "Имя", "ТолькоПросмотр", "Доступность", "ГоризонтальноеПоложение"].includes(key)) warnings.add(`Колонка «${caption(column)}»: свойство «${key}» не визуализируется`)
+      for (const key of column.properties.keys()) if (!["Заголовок", "Имя", "ТолькоПросмотр", "Доступность", "ГоризонтальноеПоложение"].some(name => name.toLowerCase() === key.toLowerCase())) warnings.add(`Колонка «${caption(column)}»: свойство «${key}» не визуализируется`)
     }
     e.columns.forEach(c => addColumn(c, 0))
     const body = table.createTBody()
@@ -305,20 +315,21 @@ function renderContent(e: BaseElement, warnings: Set<string>): HTMLElement {
       logicalRow++
       const rowNumber = logicalRow
       const lines = Array.from({ length: rowHeight }, () => body.insertRow())
-      const addCells = (columns: Column[], level: number, first: boolean) => {
+      const addCells = (columns: Column[], level: number, first: boolean, inheritedReadOnly = false) => {
         columns.forEach((column, index) => {
-          if (column instanceof TableColumnGroupElement) { addCells(children(column), level, first && index === 0); return }
+          const columnReadOnly = inheritedReadOnly || booleanProperty(column, "ТолькоПросмотр") === true || booleanProperty(column, "Доступность") === false
+          if (column instanceof TableColumnGroupElement) { addCells(children(column), level, first && index === 0, columnReadOnly); return }
           const cell = lines[level].insertCell()
           if (children(column).length) cell.colSpan = leafCount(column)
           else cell.rowSpan = rowHeight - level
           const value = row.getByColumn(column)
-          const readOnly = booleanProperty(column, "ТолькоПросмотр") === true || booleanProperty(column, "Доступность") === false || (value && (booleanProperty(value, "ТолькоПросмотр") === true || booleanProperty(value, "Доступность") === false))
+          const readOnly = columnReadOnly || (value && (booleanProperty(value, "ТолькоПросмотр") === true || booleanProperty(value, "Доступность") === false))
           cell.setAttribute("contenteditable", readOnly ? "false" : "plaintext-only")
           cell.tabIndex = 0
           cell.setAttribute("aria-label", `${caption(column)}, строка ${rowNumber}`)
           if (value) {
             applyColors(value, cell, warnings)
-            for (const key of value.properties.keys()) if (!["ЦветФона", "ЦветТекста", "ТолькоПросмотр", "Доступность", "ЦветОбразца"].includes(key)) warnings.add(`Ячейка «${value.value}»: свойство «${key}» не визуализируется`)
+            for (const key of value.properties.keys()) if (!["ЦветФона", "ЦветТекста", "ТолькоПросмотр", "Доступность", "ЦветОбразца"].some(name => name.toLowerCase() === key.toLowerCase())) warnings.add(`Ячейка «${value.value}»: свойство «${key}» не визуализируется`)
           }
           cell.style.textAlign = column.alignment === "Право" ? "right" : column.alignment === "Центр" ? "center" : "left"
           if (first && index === 0 && treeLevel) { cell.style.paddingLeft = `${10 + treeLevel * 20}px`; cell.append(document.createTextNode("↳ ")) }
@@ -338,7 +349,7 @@ function renderContent(e: BaseElement, warnings: Set<string>): HTMLElement {
             swatch.addEventListener("input", () => { label.textContent = swatch.value })
             cell.append(swatch, label)
           } else cell.append(document.createTextNode(value?.value ?? ""))
-          if (children(column).length) addCells(children(column), level + 1, first && index === 0)
+          if (children(column).length) addCells(children(column), level + 1, first && index === 0, columnReadOnly)
         })
       }
       addCells(e.columns, 0, true)

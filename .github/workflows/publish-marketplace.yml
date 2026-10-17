@@ -1,0 +1,56 @@
+name: Publish md-design marketplace
+
+# A release tag builds first; publication waits for the entire run, including
+# the Windows/Linux smoke matrix. Pull requests never publish.
+on:
+  workflow_run:
+    workflows: ["Build md-design plugin"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: Successful tagged release run of Build md-design plugin
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    # Reject failed, branch and fork/PR runs before granting a runner/token.
+    # The dot is a coarse version filter; the script validates the exact bare
+    # version, run identity and downloaded release artifact.
+    if: >-
+      github.repository == 'ShadobaAI/md_design' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      contains(github.event.workflow_run.head_branch, '.')))
+    # Skipped PR events do not take a place in the publication queue.
+    concurrency:
+      group: publish-md-design-marketplace
+      queue: max
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Never execute scripts from the triggering tag or downloaded artifact
+          # with the publication token. Publication rules come from main.
+          ref: ${{ github.event_name == 'workflow_run' && github.sha || 'main' }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Verify and publish the exact successful release artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RUN_ID: ${{ github.event.workflow_run.id || inputs.build_run_id }}
+        run: python scripts/publish-marketplace.py --run-id "$BUILD_RUN_ID" --work "$RUNNER_TEMP/md-design-publication"

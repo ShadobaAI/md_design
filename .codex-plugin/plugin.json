@@ -1,0 +1,18 @@
+{
+  "name": "md-design",
+  "version": "1.0.0",
+  "description": "Создание интерактивных прототипов форм 1С из текста, скриншотов и XML.",
+  "author": { "name": "ShadobaAI" },
+  "homepage": "https://github.com/ShadobaAI/md_design",
+  "repository": "https://github.com/ShadobaAI/md_design",
+  "keywords": ["1c", "forms", "prototypes", "md-design"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Накидка",
+    "shortDescription": "Интерактивные прототипы форм 1С",
+    "developerName": "ShadobaAI",
+    "category": "Coding",
+    "capabilities": ["Read", "Write", "Interactive"],
+    "defaultPrompt": ["Создай прототип формы 1С и открой его во встроенном браузере"]
+  }
+}

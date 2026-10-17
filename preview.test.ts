@@ -9,6 +9,60 @@ function render(text: string) {
   renderPreview(container, parseForm(text))
   return container
 }
+
+test("form properties apply to descendants and reset on rerender", () => {
+  const c = render('--- Форма --- {ТолькоПросмотр = Истина; ЦветФона = #ff0000; НеизвестноеСвойство = Значение}\nИмя: Иван__Х')
+  expect(c.querySelector('input')?.readOnly).toBe(true)
+  expect(c.querySelector<HTMLButtonElement>('.preview-adornment')?.disabled).toBe(true)
+  const warnings = renderPreview(c, parseForm('--- Форма --- {Видимость = Ложь; Доступность = Ложь; НеизвестноеСвойство = Значение}\nИмя: Иван'))
+  expect(c.hidden).toBe(true)
+  expect(c.hasAttribute('inert')).toBe(true)
+  expect(warnings.join()).toContain('НеизвестноеСвойство')
+  renderPreview(c, parseForm('Имя: Иван__Х'))
+  expect(c.hidden).toBe(false)
+  expect(c.hasAttribute('inert')).toBe(false)
+  expect(c.style.backgroundColor).toBe('')
+  expect(c.querySelector('input')?.readOnly).toBe(false)
+  expect(c.querySelector<HTMLButtonElement>('.preview-adornment')?.disabled).toBe(false)
+})
+
+test("property-only table cells preserve swatches and readonly", () => {
+  const c = render('| Цвет |\n| --- |\n| {ЦветОбразца = #ff0000; ТолькоПросмотр = Истина} |')
+  const swatch = c.querySelector<HTMLInputElement>('input[type=color]')!
+  expect(swatch.value).toBe('#ff0000')
+  expect(swatch.disabled).toBe(true)
+  expect(c.querySelector('td')?.getAttribute('contenteditable')).toBe('false')
+})
+
+test("explicit properties override shorthand regardless of key case", () => {
+  const form = parseForm('Имя: Иван__Х {кнопкаочистки = Ложь}')
+  expect(form.items[0].getProperty('КнопкаОчистки')).toBe('Ложь')
+  const c = document.createElement('div')
+  const warnings = renderPreview(c, form)
+  expect(c.querySelector('.preview-adornment')).toBeNull()
+  expect(warnings).toEqual([])
+})
+
+test("extra table values are rejected instead of overwriting another cell", () => {
+  expect(() => parseForm('| А | Б |\n| --- | --- |\n| 1 | 2 | 3 |')).toThrow(/лишнюю ячейку|повторное значение/)
+  const c = render('| А | Б |\n| --- | --- |\n| 1 | 2 |')
+  expect([...c.querySelectorAll('td')].map(cell => cell.textContent)).toEqual(['1', '2'])
+})
+
+test("readonly column groups disable descendant cells and controls", () => {
+  const c = render('| -Данные- {ТолькоПросмотр = Истина} ||\n| А | Б |\n| --- | --- |\n| 1 | [X] |')
+  expect([...c.querySelectorAll('td')].map(cell => cell.getAttribute('contenteditable'))).toEqual(['false', 'false'])
+  expect(c.querySelector<HTMLInputElement>('input[type=checkbox]')?.disabled).toBe(true)
+})
+
+test("menu captions matching Object.prototype keys are ordinary text", () => {
+  for (const caption of ['constructor', '__proto__', 'toString']) {
+    const c = render(`<\n${caption}\n. Action >`)
+    expect(c.textContent).toContain(caption)
+    expect(c.textContent).toContain('Action')
+    expect(c.querySelector('[aria-haspopup=menu]')).not.toBeNull()
+  }
+})
 test("order: captions, values, commands, columns and editable cells", () => {
   const c = render(readFileSync("prototypes/order.md", "utf8"))
   expect(c.querySelector("h1")?.textContent).toBe("Поступление товаров")

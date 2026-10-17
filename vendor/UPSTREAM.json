@@ -1,6 +1,20 @@
 {
   "repository": "https://github.com/crimsongoldteam/md_design",
   "commit": "45e130f14970367c6e38deca937f61eb896ee6db",
+  "localPatches": [
+    {
+      "file": "lib/parser/visitorTools/commandBarManager.ts",
+      "reason": "Use a null-prototype caption dictionary to support names such as constructor and __proto__."
+    },
+    {
+      "file": "lib/parser/visitor.ts",
+      "reason": "Use BaseElement.setProperty so differently cased keys override rather than duplicate properties."
+    },
+    {
+      "file": "lib/parser/visitorTools/tableRowMap.ts",
+      "reason": "Preserve property-only cells and reject excess cells instead of silently overwriting values."
+    }
+  ],
   "files": [
     "lib/elements/attributes.ts",
     "lib/elements/baseElement.ts",

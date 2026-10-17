@@ -1,11 +1,13 @@
 import { build } from 'esbuild'
-import { mkdir, copyFile, readFile, readdir, writeFile } from 'node:fs/promises'
+import { mkdir, copyFile, readFile, readdir, writeFile, rm } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 const root = fileURLToPath(new URL('..', import.meta.url))
-const common = { bundle: true, absWorkingDir: root, alias: { '@': resolve(root, 'vendor/md_design/lib') }, target: 'es2022', legalComments: 'linked', metafile: true }
+if (process.argv.length > 2) throw new Error('This script builds the production bundle without options')
+const common = { bundle: true, absWorkingDir: root, alias: { '@': resolve(root, 'vendor/md_design/lib') }, target: 'es2022', legalComments: 'linked', metafile: true, sourcemap: false, minify: true }
+await rm(resolve(root, 'dist'), { recursive: true, force: true })
 await mkdir(resolve(root, 'dist'), { recursive: true })
-const browser = await build({ ...common, entryPoints: ['playground.ts'], outfile: 'dist/playground.js', minify: true, format: 'esm' })
+const browser = await build({ ...common, entryPoints: ['playground.ts'], outfile: 'dist/playground.js', format: 'esm' })
 const parser = await build({ ...common, entryPoints: ['parser.ts'], outfile: 'dist/parser.mjs', platform: 'node', format: 'esm' })
 await copyFile(resolve(root, 'playground.html'), resolve(root, 'dist/index.html'))
 await copyFile(resolve(root, 'preview.css'), resolve(root, 'dist/preview.css'))
@@ -24,3 +26,4 @@ for (const name of [...packages].sort()) {
   for (const license of licenses) notices += (await readFile(resolve(directory, license), 'utf8')) + '\n'
 }
 await writeFile(resolve(root, 'dist/THIRD_PARTY.md'), notices)
+await writeFile(resolve(root, 'dist/build-info.json'), JSON.stringify({ profile: 'release', node: process.version }, null, 2) + '\n')

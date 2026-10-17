@@ -7,7 +7,8 @@ import { HierarchyManager } from "./hierarchyManager"
 export class CommandBarManager {
   private readonly hierarchy: HierarchyManager
 
-  private rootButtons: { [key: string]: ButtonElement } = {}
+  // Local patch: captions such as "constructor" must not resolve to Object.prototype.
+  private rootButtons: { [key: string]: ButtonElement } = Object.create(null)
   private defaultGroup: CommandBarElement | ButtonGroupElement
   private readonly commandBar: CommandBarElement
 

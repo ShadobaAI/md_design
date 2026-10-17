@@ -37,7 +37,8 @@ export class TableRowMap {
   }
 
   public addElement(item: TableCellElement, level: number): void {
-    const isEmpty = !item.hasCheckbox && item.value.trim() == ""
+    // Local patch: property-only cells still carry meaningful presentation data.
+    const isEmpty = !item.hasCheckbox && item.value.trim() == "" && item.properties.size === 0
 
     if (this.headerMap.isSkipableColumn() && isEmpty) return
 
@@ -51,8 +52,8 @@ export class TableRowMap {
     }
 
     const column = this.headerMap.getCurrentColumn()
-    if (!column) {
-      return
+    if (!column || this.currentRow.items.has(column)) {
+      throw new Error("Строка таблицы содержит лишнюю ячейку или повторное значение объединённой колонки")
     }
 
     if (item.hasCheckbox) {

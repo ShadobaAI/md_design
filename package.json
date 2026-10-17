@@ -10,7 +10,8 @@
     "build": "tsc --noEmit && node scripts/build.mjs",
     "test": "vitest run && node --test tests/*.test.mjs",
     "start": "node scripts/preview.mjs",
-    "setup": "npm ci && npm run build && node scripts/install.mjs"
+    "package:plugin": "python scripts/package-plugin.py",
+    "check:plugin": "node scripts/check-plugin.mjs"
   },
   "dependencies": {
     "@ungap/trim-end": "0.2.0",

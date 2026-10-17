@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { startServer, readPrototype } from '../scripts/server.mjs'
 import http from 'node:http'
-const dist = new URL('../dist/', import.meta.url)
+import { pathToFileURL } from 'node:url'
+const dist = process.env.MD_DESIGN_DIST ? pathToFileURL(process.env.MD_DESIGN_DIST.replace(/\\/g, '/') + '/') : new URL('../dist/', import.meta.url)
 test('server exposes only the selected file; reload, HEAD, Host/Origin/method and token isolation', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'md-design-test-'))
   t.after(() => rm(directory, { recursive: true, force: true }))
@@ -28,6 +29,8 @@ test('server exposes only the selected file; reload, HEAD, Host/Origin/method an
   const head = await fetch(url, { method: 'HEAD' })
   assert.equal(await head.text(), '')
   assert.match(head.headers.get('content-security-policy'), /default-src 'none'/)
+  assert.equal((await fetch(url + 'playground.js.map')).status, 404)
+  assert.equal((await fetch(url + 'parser.mjs.map')).status, 404)
   assert.equal(head.headers.get('access-control-allow-origin'), null)
   await rm(file)
   assert.equal((await fetch(url + 'prototype')).status, 500)
