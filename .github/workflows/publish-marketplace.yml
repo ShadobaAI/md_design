@@ -1,8 +1,8 @@
-name: Publish md-design marketplace
+name: Publish md-design to codex-plugins
 
 # A release tag builds first; publication waits for the entire run, including
 # the Windows/Linux smoke matrix. Pull requests never publish.
-# Source access stays read-only; only md_design-mkt receives a push.
+# Source access stays read-only; only codex-plugins receives a push.
 on:
   workflow_run:
     workflows: ["Build md-design plugin"]
@@ -32,7 +32,7 @@ jobs:
       contains(github.event.workflow_run.head_branch, '.')))
     # Skipped PR events do not take a place in the publication queue.
     concurrency:
-      group: publish-md-design-marketplace
+      group: publish-md-design-to-codex-plugins
       queue: max
       cancel-in-progress: false
     runs-on: ubuntu-latest
@@ -50,7 +50,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
-      - name: Verify release artifact and publish to md_design-mkt
+      - name: Verify release artifact and publish to codex-plugins
         env:
           GH_TOKEN: ${{ github.token }}
           MARKETPLACE_TOKEN: ${{ secrets.MARKETPLACE_TOKEN }}

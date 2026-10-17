@@ -15,7 +15,7 @@ from pathlib import Path
 from release_policy import version_key
 
 REPOSITORY = "ShadobaAI/md_design"
-MARKETPLACE_REPOSITORY = "ShadobaAI/md_design-mkt"
+MARKETPLACE_REPOSITORY = "ShadobaAI/codex-plugins"
 
 
 def run(*args, cwd=None, env=None):
@@ -70,6 +70,74 @@ def stage_catalog(checkout):
             raise ValueError(f"Runtime file was not staged: {file}")
 
 
+def update_catalog(checkout, payload):
+    catalog = checkout / ".agents/plugins/marketplace.json"
+    if not catalog.resolve().is_relative_to(checkout.resolve()):
+        raise ValueError("Unsafe catalog destination")
+    incoming = json.loads((payload / ".agents/plugins/marketplace.json").read_text(encoding="utf-8"))
+    current = json.loads(catalog.read_text(encoding="utf-8")) if catalog.exists() else {}
+    plugins = current.get("plugins", [])
+    names = [plugin["name"] for plugin in plugins]
+    if len(names) != len(set(names)):
+        raise ValueError("Duplicate plugin names in marketplace catalog")
+    entry = incoming["plugins"][0]
+    if entry["name"] in names:
+        plugins[names.index(entry["name"])] = entry
+    else:
+        plugins.append(entry)
+    current.update(name=incoming["name"], plugins=plugins)
+    current["interface"] = {**current.get("interface", {}), **incoming["interface"]}
+    catalog.parent.mkdir(parents=True, exist_ok=True)
+    catalog.write_text(json.dumps(current, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def stage_release(checkout, payload, source, build):
+    previous_file = checkout / "plugins/md-design/build-info.json"
+    if previous_file.exists():
+        previous = json.loads(previous_file.read_text(encoding="utf-8"))
+        if previous["revision"] == build["revision"] and previous["version"] == build["version"]:
+            return False
+        if version_key(build["version"]) <= version_key(previous["version"]):
+            raise ValueError("Publication cannot replace or roll back an existing version")
+        run("git", "merge-base", "--is-ancestor", previous["revision"], build["revision"], cwd=source)
+    target = checkout / "plugins/md-design"
+    if target.is_symlink() or not target.resolve().is_relative_to(checkout.resolve()):
+        raise ValueError("Unsafe plugin destination")
+    # Merge the one-plugin release catalog into the shared catalog.
+    update_catalog(checkout, payload)
+    if target.exists():
+        shutil.rmtree(target)
+    shutil.copytree(payload / "plugins/md-design", target)
+    stage_catalog(checkout)
+    return True
+
+
+def push_release(checkout, payload, source, build, environment):
+    run("git", "config", "user.name", "github-actions[bot]", cwd=checkout)
+    run("git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com", cwd=checkout)
+    for attempt in range(3):
+        if not stage_release(checkout, payload, source, build):
+            print("Release is already published")
+            return
+        run("git", "commit", "-m", f"Publish md-design {build['version']}", cwd=checkout)
+        parents = run("git", "rev-list", "--parents", "-n", "1", "HEAD", cwd=checkout).split()[1:]
+        try:
+            run("git", "push", "origin", "HEAD:refs/heads/main", cwd=checkout, env=environment)
+            return
+        except subprocess.CalledProcessError:
+            if attempt == 2:
+                raise
+            # Another repository may have published to the shared store. Retry
+            # only if main advanced, rebuilding our commit on its latest state.
+            run("git", "fetch", "--no-tags", "origin", "refs/heads/main", cwd=checkout, env=environment)
+            latest = run("git", "rev-parse", "FETCH_HEAD", cwd=checkout)
+            if parents and latest == parents[0]:
+                raise
+            if parents:
+                run("git", "merge-base", "--is-ancestor", parents[0], latest, cwd=checkout)
+            run("git", "reset", "--hard", latest, cwd=checkout)
+
+
 def publish(run_id, work):
     if os.environ.get("GITHUB_REPOSITORY") != REPOSITORY:
         raise ValueError("Publication is restricted to ShadobaAI/md_design")
@@ -77,7 +145,7 @@ def publish(run_id, work):
     validate_run(record)
     token = os.environ.get("MARKETPLACE_TOKEN")
     if not token:
-        raise ValueError("MARKETPLACE_TOKEN with Contents write access to ShadobaAI/md_design-mkt is required")
+        raise ValueError(f"MARKETPLACE_TOKEN with Contents write access to {MARKETPLACE_REPOSITORY} is required")
     marketplace_environment = {**os.environ, "GH_TOKEN": token}
     work.mkdir(parents=True, exist_ok=False)
     download = work / "download"
@@ -99,33 +167,7 @@ def publish(run_id, work):
     validate_source_tag(source, build)
     checkout = work / "catalog"
     clone_marketplace(checkout, marketplace_environment)
-    previous_file = checkout / "plugins/md-design/build-info.json"
-    if previous_file.exists():
-        previous = json.loads(previous_file.read_text(encoding="utf-8"))
-        if previous["revision"] == build["revision"] and previous["version"] == build["version"]:
-            print("Release is already published")
-            return
-        if version_key(build["version"]) <= version_key(previous["version"]):
-            raise ValueError("Publication cannot replace or roll back an existing version")
-        # Refuse an older/divergent release. No forced pushes or rollback.
-        run("git", "merge-base", "--is-ancestor", previous["revision"], build["revision"], cwd=source)
-    # Update only the delivered plugin and catalog in the marketplace checkout.
-    target = checkout / "plugins/md-design"
-    if target.is_symlink() or not target.resolve().is_relative_to(checkout.resolve()):
-        raise ValueError("Unsafe plugin destination")
-    if target.exists():
-        shutil.rmtree(target)
-    shutil.copytree(payload / "plugins/md-design", target)
-    catalog = checkout / ".agents/plugins/marketplace.json"
-    if not catalog.resolve().is_relative_to(checkout.resolve()):
-        raise ValueError("Unsafe catalog destination")
-    catalog.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(payload / ".agents/plugins/marketplace.json", catalog)
-    run("git", "config", "user.name", "github-actions[bot]", cwd=checkout)
-    run("git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com", cwd=checkout)
-    stage_catalog(checkout)
-    run("git", "commit", "-m", f"Publish md-design {build['version']}", cwd=checkout)
-    run("git", "push", "origin", "HEAD:refs/heads/main", cwd=checkout, env=marketplace_environment)
+    push_release(checkout, payload, source, build, marketplace_environment)
 
 
 if __name__ == "__main__":

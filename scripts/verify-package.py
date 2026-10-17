@@ -45,7 +45,8 @@ def verify(download: Path, destination: Path):
                 raise ValueError("Unexpected marketplace content")
             seen.add(canonical.casefold())
         catalog = json.loads(archive.read(".agents/plugins/marketplace.json"))
-        if (catalog["name"] != "shadobaai-md-design" or len(catalog["plugins"]) != 1
+        if (catalog["name"] != "shadobaai" or catalog.get("interface") != {"displayName": "ShadobaAI"}
+                or len(catalog["plugins"]) != 1
                 or catalog["plugins"][0]["name"] != "md-design"
                 or catalog["plugins"][0]["source"] != {"source": "local", "path": "./plugins/md-design"}
                 or catalog["plugins"][0]["policy"] != {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}):

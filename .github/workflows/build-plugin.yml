@@ -58,7 +58,7 @@ jobs:
       - name: Build summary
         run: |
           echo 'Plugin ZIP, local marketplace ZIP and SHA256SUMS are in md-design-plugin.' >> "$GITHUB_STEP_SUMMARY"
-          echo 'Package verified. Successful stable tag builds publish to ShadobaAI/md_design-mkt after all smoke jobs pass; PR builds never publish.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Package verified. Successful stable tag builds publish to ShadobaAI/codex-plugins after all smoke jobs pass; PR builds never publish.' >> "$GITHUB_STEP_SUMMARY"
 
   smoke:
     needs: build

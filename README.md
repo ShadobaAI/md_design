@@ -9,10 +9,10 @@
 3. В Codex открой **Плагины (Plugins)** → **Добавить (Add)** → **Добавить магазин (Add Marketplace)** → **Из репозитория (Add from a repository)**. Вставь адрес и нажми **Синхронизировать (Sync)**:
 
    ```text
-   https://github.com/ShadobaAI/md_design-mkt
+   https://github.com/ShadobaAI/codex-plugins
    ```
 
-4. В добавленном магазине найди **Накидку**, нажми **Установить (Install)** и убедись, что плагин включён.
+4. В магазине **ShadobaAI** найди **Накидку**, нажми **Установить (Install)** и убедись, что плагин включён.
 5. Начни новый чат в папке своего проекта и отправь:
 
    ```text
@@ -36,8 +36,8 @@
 Для обновления отправь Codex:
 
 ```text
-Обнови магазин Накидки командой:
-codex plugin marketplace upgrade shadobaai-md-design
+Обнови магазин ShadobaAI командой:
+codex plugin marketplace upgrade shadobaai
 ```
 
 Дождись успешного обновления, перезапусти приложение и начни новый чат. Команда описана в [справочнике Codex CLI](https://learn.chatgpt.com/docs/cli/reference#codex-plugin-marketplace).
@@ -79,7 +79,7 @@ ZIP-файлы и `SHA256SUMS` появятся в `.build`, локальный 
 
 Для выпуска:
 
-1. Создай репозиторий `ShadobaAI/md_design-mkt`. В настройках Actions этого репозитория исходников добавь secret `MARKETPLACE_TOKEN`: fine-grained GitHub token с доступом только к `md_design-mkt` и правом **Contents: Read and write**. Ветка `main` магазина должна разрешать push владельцу токена.
+1. В настройках Actions репозитория `ShadobaAI/md_design` добавь secret `MARKETPLACE_TOKEN`: fine-grained GitHub token с доступом только к `ShadobaAI/codex-plugins` и правом **Contents: Read and write**. Ветка `main` магазина должна разрешать push владельцу токена.
 2. Отправь проверенные исходники в `main`.
 3. Создай тег свободной версии в формате `MAJOR.MINOR.PATCH`, без префикса `v`, и отправь его:
 
@@ -88,9 +88,9 @@ ZIP-файлы и `SHA256SUMS` появятся в `.build`, локальный 
    git push origin 0.1.0
    ```
 
-4. Дождись успешных **Build md-design plugin** и **Publish md-design marketplace** в Actions. При сбое публикации повтори её workflow с `build_run_id` успешной сборки тега.
+4. Дождись успешных **Build md-design plugin** и **Publish md-design to codex-plugins** в Actions. При сбое публикации повтори её workflow с `build_run_id` успешной сборки тега.
 
-CI проверяет pull request и стабильные теги; обычный push ветки сборку не запускает. Версия релиза берётся из тега. Готовый плагин публикуется в `main` репозитория `md_design-mkt`.
+CI проверяет pull request и стабильные теги; обычный push ветки сборку не запускает. Версия релиза берётся из тега. Готовый плагин публикуется в `plugins/md-design` репозитория `ShadobaAI/codex-plugins`.
 
 Материалы: [навык](skills/md-design/SKILL.md), [синтаксис](skills/md-design/references/syntax.md), [скриншоты и XML](skills/md-design/references/reconstruction.md), [примеры](prototypes/), [upstream и локальные патчи](vendor/UPSTREAM.json).
 

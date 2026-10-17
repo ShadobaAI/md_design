@@ -71,7 +71,22 @@ class PackagingTests(unittest.TestCase):
         source = json.loads((self.root / ".agents/plugins/marketplace.json").read_text(encoding="utf-8"))
         catalog = json.loads((self.root / "unpacked/.agents/plugins/marketplace.json").read_text(encoding="utf-8"))
         self.assertEqual(source["plugins"][0]["policy"]["installation"], "NOT_AVAILABLE")
+        self.assertEqual(catalog["name"], "shadobaai")
+        self.assertEqual(catalog["interface"]["displayName"], "ShadobaAI")
         self.assertEqual(catalog["plugins"][0]["policy"]["installation"], "AVAILABLE")
+
+    def test_packages_for_another_marketplace_are_rejected(self):
+        path = self.root / ".agents/plugins/marketplace.json"
+        original = path.read_text(encoding="utf-8")
+        for key, value in [("name", "other-marketplace"), ("interface", {"displayName": "Other store"})]:
+            catalog = json.loads(original)
+            catalog[key] = value
+            path.write_text(json.dumps(catalog), encoding="utf-8")
+            output = self.package()
+            destination = self.root / f"unpacked-{key}"
+            with self.subTest(key=key), self.assertRaisesRegex(ValueError, "Unexpected marketplace source"):
+                verifier.verify(output, destination)
+            self.assertFalse(destination.exists())
 
     def test_release_excludes_stale_source_maps(self):
         output = self.package()
@@ -268,6 +283,98 @@ class PackagingTests(unittest.TestCase):
             publisher.publish(1, self.root / "publication-rollback")
         self.assertEqual(real_run("git", "rev-parse", "main", cwd=marketplace), published)
         self.assertEqual(len(pushes), 2)
+
+    def test_catalog_merge_preserves_other_plugins_order_and_metadata(self):
+        payload = self.root / "payload"
+        verifier.verify(self.package(), payload)
+        incoming = json.loads((payload / ".agents/plugins/marketplace.json").read_text(encoding="utf-8"))
+        checkout = self.root / "store"
+        catalog_file = checkout / ".agents/plugins/marketplace.json"
+        catalog_file.parent.mkdir(parents=True)
+        other = {"name": "notes", "source": {"source": "local", "path": "./plugins/notes"},
+                 "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}, "category": "Productivity"}
+        for plugins in [[other], [{"name": "md-design", "category": "Outdated"}, other]]:
+            with self.subTest(replace=plugins[0]["name"] == "md-design"):
+                current = {"name": "shadobaai", "owner": {"name": "ShadobaAI"},
+                           "interface": {"displayName": "ShadobaAI", "shortDescription": "Shared plugins"},
+                           "plugins": plugins}
+                catalog_file.write_text(json.dumps(current), encoding="utf-8")
+                publisher.update_catalog(checkout, payload)
+                actual = json.loads(catalog_file.read_text(encoding="utf-8"))
+                expected_names = [entry["name"] for entry in plugins]
+                if "md-design" not in expected_names:
+                    expected_names.append("md-design")
+                self.assertEqual([entry["name"] for entry in actual["plugins"]], expected_names)
+                self.assertEqual(next(entry for entry in actual["plugins"] if entry["name"] == "notes"), other)
+                self.assertEqual(next(entry for entry in actual["plugins"] if entry["name"] == "md-design"), incoming["plugins"][0])
+                self.assertEqual(actual["name"], incoming["name"])
+                self.assertEqual(actual["owner"], current["owner"])
+                self.assertEqual(actual["interface"]["shortDescription"], "Shared plugins")
+
+        duplicate = {**current, "plugins": [other, other]}
+        catalog_file.write_text(json.dumps(duplicate), encoding="utf-8")
+        original = catalog_file.read_bytes()
+        with self.assertRaisesRegex(ValueError, "Duplicate plugin names"):
+            publisher.update_catalog(checkout, payload)
+        self.assertEqual(catalog_file.read_bytes(), original)
+
+    def test_shared_store_push_conflicts_are_bounded_and_preserve_other_plugins(self):
+        real_run = publisher.run
+        identity = ["git", "-c", "user.name=CI", "-c", "user.email=ci@example.test"]
+        relative_catalog = ".agents/plugins/marketplace.json"
+        for scenario, expected_attempts in [("concurrent", 2), ("denied", 1), ("busy", 3)]:
+            with self.subTest(scenario=scenario):
+                root = self.root / scenario
+                root.mkdir()
+                origin, seed, checkout, payload = [root / name for name in ["origin.git", "seed", "checkout", "payload"]]
+                build = verifier.verify(self.package(), payload)
+                real_run("git", "init", "--quiet", "--bare", str(origin))
+                real_run("git", "init", "--quiet", "--initial-branch=main", str(seed))
+                other = {"name": "notes", "source": {"source": "local", "path": "./plugins/notes"},
+                         "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}, "category": "Productivity"}
+                catalog = {"name": "shadobaai", "interface": {"displayName": "ShadobaAI"}, "plugins": [other]}
+                catalog_file = seed / relative_catalog
+                catalog_file.parent.mkdir(parents=True)
+                catalog_file.write_text(json.dumps(catalog), encoding="utf-8")
+                notes_file = seed / "plugins/notes/notes.txt"
+                notes_file.parent.mkdir(parents=True)
+                notes_file.write_text("initial")
+                (seed / "README.md").write_text("Shared plugin store")
+                real_run("git", "add", ".", cwd=seed)
+                real_run(*identity, "commit", "-qm", "Initial store", cwd=seed)
+                real_run("git", "remote", "add", "origin", str(origin), cwd=seed)
+                real_run("git", "push", "--quiet", "origin", "main", cwd=seed)
+                real_run("git", "clone", "--quiet", "--branch", "main", str(origin), str(checkout))
+                attempts = []
+
+                def competing_run(*args, cwd=None, env=None):
+                    if args[:2] == ("git", "push") and Path(cwd) == checkout:
+                        attempts.append(args)
+                        if scenario == "denied":
+                            raise subprocess.CalledProcessError(128, args)
+                        if scenario == "busy" or len(attempts) == 1:
+                            other["description"] = f"Concurrent update {len(attempts)}"
+                            catalog_file.write_text(json.dumps(catalog), encoding="utf-8")
+                            notes_file.write_text(other["description"])
+                            real_run("git", "add", ".", cwd=seed)
+                            real_run(*identity, "commit", "-qm", other["description"], cwd=seed)
+                            real_run("git", "push", "--quiet", "origin", "main", cwd=seed)
+                    return real_run(*args, cwd=cwd, env=env)
+
+                with patch.object(publisher, "run", side_effect=competing_run):
+                    if scenario == "concurrent":
+                        publisher.push_release(checkout, payload, self.root, build, dict(publisher.os.environ))
+                    else:
+                        with self.assertRaises(subprocess.CalledProcessError):
+                            publisher.push_release(checkout, payload, self.root, build, dict(publisher.os.environ))
+                self.assertEqual(len(attempts), expected_attempts)
+                published = json.loads(real_run("git", "show", f"main:{relative_catalog}", cwd=origin))
+                self.assertEqual(next(entry for entry in published["plugins"] if entry["name"] == "notes"), other)
+                self.assertEqual(real_run("git", "show", "main:plugins/notes/notes.txt", cwd=origin),
+                                 other.get("description", "initial"))
+                self.assertEqual(real_run("git", "show", "main:README.md", cwd=origin), "Shared plugin store")
+                self.assertEqual(sum(entry["name"] == "md-design" for entry in published["plugins"]),
+                                 int(scenario == "concurrent"))
 
 
 class PublicationTests(unittest.TestCase):
