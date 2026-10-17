@@ -26,9 +26,11 @@ node "<plugin>/scripts/preview.mjs" --file "<absolute-path-to-form.md>" --check
 node "<plugin>/scripts/preview.mjs" --file "<absolute-path-to-form.md>" --background
 ```
 
+On Windows, when shell commands are sandboxed, run `--background` with the shell tool's `sandbox_permissions: "require_escalated"` and a justification limited to starting this local preview server. Request it on the first launch: Windows MXC stops detached child processes when the launching command exits, even after readiness JSON. Keeping a foreground shell alive may also leave its server unreachable from the host browser. Keep `--check` sandboxed. If approval is denied or escalation is unavailable, report the limitation and offer the exact command for the user to run in their own terminal; do not change sandbox settings or try alternate launchers to bypass it. Outside a sandbox, use the command normally.
+
 The second command returns JSON with `url`, `pid`, and `file`. The OS selects a free port for each preview. Use the complete returned URL, including its port and random path, in the in-app browser.
 
-Wait for a successful exit and readiness JSON before opening. On an error, inspect stderr, correct its cause, and retry. Files are limited to 200,000 characters / 800,000 bytes; do not truncate a larger form silently.
+Wait for a successful exit and readiness JSON before opening, then confirm the form loads through the browser tool. JSON confirms startup, not continued availability after the launcher exits. On an error, inspect stderr and the launch permissions before retrying; a shell socket-access denial is not a browser-permission denial. Files are limited to 200,000 characters / 800,000 bytes; do not truncate a larger form silently.
 
 Open with `mcp__codex_app__open_in_codex`: `{target: {type: "browser", url: <url>}}`. Inspect using an available browser tool, e.g. `cua.createBrowserTab("iab", url, {visible:true})`, following that tool's documentation. If available, call `markDeliverable()` on the final tab. Opening a panel alone is not visual verification. If the in-app browser is unavailable, return the URL and state the limitation.
 
