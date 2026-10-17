@@ -13,13 +13,15 @@ from release_policy import read_source_manifest, resolve_version
 
 ROOT = Path(__file__).resolve().parent.parent
 FILES = [
+    "LICENSE",
     ".codex-plugin/plugin.json",
+    "settings.json",
     "skills/md-design/SKILL.md",
     "skills/md-design/references/syntax.md",
     "skills/md-design/references/showcase.md",
     "skills/md-design/references/reconstruction.md",
     "skills/md-design/references/examples.md",
-    "scripts/preview.mjs", "scripts/server.mjs",
+    "scripts/preview.mjs", "scripts/server.mjs", "scripts/settings.mjs",
     "prototypes/showcase.md", "prototypes/order.md", "prototypes/counterparty.md",
     "prototypes/save-report.md", "prototypes/pricing-zones.md",
     "prototypes/artifacts.md",
@@ -82,6 +84,27 @@ def package(output, version=None):
     json_write(plugin / ".codex-plugin/plugin.json", {**manifest, "version": version})
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=normal"], cwd=ROOT, text=True).strip())
+    source_notice = (
+        f"# Source code\n\nNakidka {version}\n\n"
+        f"https://github.com/ShadobaAI/md_design/tree/{revision}\n\n"
+        "## Original contributions\n\nCopyright (c) 2026 ShadobaAI and contributors.\n\n"
+        "This Source Code Form is subject to the terms of the Mozilla Public "
+        "License, v. 2.0. If a copy of the MPL was not distributed with this "
+        "file, You can obtain one at https://mozilla.org/MPL/2.0/.\n\n"
+        "See LICENSE for the full terms. This notice applies only to original "
+        "contributions to the Nakidka plugin (code, skills and documentation), "
+        "including their compiled form. Generating a form with the plugin does "
+        "not by itself subject the form or user data to MPL. Material copied "
+        "from the plugin retains its applicable license. Third-party "
+        "material retains its own licenses: see dist/THIRD_PARTY.md, "
+        "vendor/md_design/LICENSE.md and vendor/UPSTREAM.json.\n"
+    )
+    if dirty:
+        source_notice += (
+            "\nThis local build includes uncommitted changes. The link above identifies "
+            "only the base commit; publish the modified source before redistribution.\n"
+        )
+    (plugin / "SOURCE.md").write_text(source_notice, encoding="utf-8")
     json_write(plugin / "build-info.json", {
         "plugin": "md-design", "version": version, "profile": profile,
         "revision": revision, "dirty": dirty, "runId": os.environ.get("GITHUB_RUN_ID"),

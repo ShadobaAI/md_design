@@ -5,7 +5,7 @@ description: Create and refine interactive 1C form prototypes in md_design from 
 
 # 1C form prototypes
 
-Deliver a UTF-8 md_design `.md` file in the user's workspace and an interactive preview in the in-app browser. Markdown is the persistent source. Show only the form, without an editor, toolbar, instructions, or extra buttons. Browser edits are temporary and reset on reload; 1C commands do not execute. Keep captions and responses in the user's language; DSL keywords remain Cyrillic.
+Deliver a UTF-8 md_design `.md` file in the user's workspace and an interactive preview in the in-app browser. Markdown is the persistent source. Show only the form, without a playground editor, service toolbar, instructions, or extra buttons; preserve the form's own commands. Browser edits are temporary and reset on reload; 1C commands do not execute. Keep captions and responses in the user's language; DSL keywords remain Cyrillic.
 
 For a feature tour, preview `<plugin>/prototypes/showcase.md`; copy it into the workspace before editing. See the [feature map](references/showcase.md).
 
@@ -26,13 +26,15 @@ node "<plugin>/scripts/preview.mjs" --file "<absolute-path-to-form.md>" --check
 node "<plugin>/scripts/preview.mjs" --file "<absolute-path-to-form.md>" --background
 ```
 
-The second command returns JSON with `url`, `pid`, and `file`. Use the complete URL, including its random path; do not assume a fixed port or open an external browser. Optional `--port <number>` overrides the OS-selected port.
+The second command returns JSON with `url`, `pid`, and `file`. Use the complete URL, including its random path, in the in-app browser. The default port is 18765. Persistent settings are in `$CODEX_HOME/md-design/config.json`, or `~/.codex/md-design/config.json` when `CODEX_HOME` is unset: `{"port": 18765}`. The only supported key is `port`, an integer from 0 to 65535; changes apply to the next launch. Change these settings only when requested; never edit the installed plugin defaults. Optional `--port <number>` overrides the configured port for one launch; `--port 0` requests an OS-selected port.
 
 Wait for a successful exit and readiness JSON before opening. On an error, inspect stderr, correct its cause, and retry. Files are limited to 200,000 characters / 800,000 bytes; do not truncate a larger form silently.
 
 Open with `mcp__codex_app__open_in_codex`: `{target: {type: "browser", url: <url>}}`. Inspect using an available browser tool, e.g. `cua.createBrowserTab("iab", url, {visible:true})`, following that tool's documentation. If available, call `markDeliverable()` on the final tab. Opening a panel alone is not visual verification. If the in-app browser is unavailable, return the URL and state the limitation.
 
-The server rereads the selected file; the page rerenders when its contents change. Polling an unchanged file preserves current input. Reuse the process and tab for the same form; start another instance for a different file. Stop only a PID returned by your own launch when preview is no longer needed; leave the delivered form open.
+If browser permissions block inspection, ask the user to allow the preview's origin (`http://127.0.0.1:<actual-port>`, without the random path) in **Settings → Browser → Agent permissions**, then retry. Organization-managed restrictions require an administrator. Report unverified visual behavior; do not bypass access controls or change ports to evade them.
+
+The server rereads the selected file; the page rerenders when its contents change. Polling an unchanged file preserves current input. Reuse the process and tab for the same form. A second form needs another instance with a different `--port` and browser access to that origin. If the configured port is busy, report the conflict rather than silently changing it. Stop only a PID returned by your own launch when preview is no longer needed; leave the delivered form open.
 
 If `dist/parser.mjs` is missing, rebuild a source checkout with `npm ci` and `npm run build`. Reinstall an incomplete installed package instead of downloading arbitrary dependencies.
 
